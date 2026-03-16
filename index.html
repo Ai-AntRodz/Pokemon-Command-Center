@@ -33,7 +33,6 @@
 </div>
 
 <script>
-// Logging Logic
 function updateLog(agent, task, status) {
     const logContent = document.getElementById('log-content');
     const entry = document.createElement('div');
@@ -54,7 +53,6 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// Your New Task / Enemy Mapping
 const NODES = {
     CODING:  { x: 220, y: 150, name: 'DEV_LAPTOP', enemy: 'codingOn' },
     LEGACY:  { x: 580, y: 150, name: 'FLOPPY_DISK', enemy: 'FLOPPYOn' },
@@ -62,24 +60,25 @@ const NODES = {
 };
 
 function preload() {
-    // 1. Central Unit: Blue
-    this.load.image('blue', 'trainerblue.gif');
+    // Correctly routing to your 'gifs-Sprites' folder
+    // Central Unit
+    this.load.image('blue', 'gifs-Sprites/trainerblue.gif'); //
     
-    // 2. Tactical Assets
+    // Tactical Assets
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     
-    // 3. Agent GIFs (Using your provided names)
-    this.load.image('smeargle', 'smeargleOn.gif');
-    this.load.image('unown', 'unown-aOn.gif');
-    this.load.image('rotom', 'rotomOn.gif');
-    this.load.image('snorlax', 'snorlaxOn.gif');
-    this.load.image('mewtwo', 'mewtwoOn.gif');
-    this.load.image('ditto', 'dittoOn.gif');
+    // Agent GIFs 
+    this.load.image('smeargle', 'gifs-Sprites/smeargleOn.gif'); //
+    this.load.image('unown', 'gifs-Sprites/unown-aOn.gif'); //
+    this.load.image('rotom', 'gifs-Sprites/rotomOn.gif'); //
+    this.load.image('snorlax', 'gifs-Sprites/snorlaxOn.gif'); //
+    this.load.image('mewtwo', 'gifs-Sprites/mewtwoOn.gif'); //
+    this.load.image('ditto', 'gifs-Sprites/dittoOn.gif'); //
 
-    // 4. Enemy GIFs
-    this.load.image('codingOn', 'codingOn.gif');
-    this.load.image('FLOPPYOn', 'FLOPPYOn.gif');
-    this.load.image('terminalOnTest', 'terminalOnTest.webp');
+    // Enemy GIFs
+    this.load.image('codingOn', 'gifs-Sprites/codingOn.gif'); //
+    this.load.image('FLOPPYOn', 'gifs-Sprites/FLOPPYOn.gif'); //
+    this.load.image('terminalOnTest', 'gifs-Sprites/terminalOnTest.webp'); //
 }
 
 let beltBalls = {};
@@ -88,35 +87,28 @@ let activeBattles = {};
 function create() {
     const scene = this;
 
-    // Grid Background (Blue Theme)
+    // Background Grid
     const g = this.add.graphics();
     g.lineStyle(1, 0x00aaff, 0.08);
     for(let i=0; i<800; i+=40) g.lineBetween(i, 0, i, 600);
     for(let i=0; i<600; i+=40) g.lineBetween(0, i, 800, i);
 
-    // Blue Unit in center
+    // Blue Unit
     this.blue = this.add.image(400, 300, 'blue').setScale(1.5);
 
-    // Sidebar Belt (Updated with Ditto)
+    // Sidebar Belt
     const agentList = ['Snorlax', 'Rotom', 'Unown', 'Smeargle', 'Mewtwo', 'Ditto'];
     agentList.forEach((name, i) => {
         const yPos = 60 + (i * 95);
         const ball = this.add.image(50, yPos, 'ball').setScale(2);
         const label = this.add.text(85, yPos, name.toUpperCase(), { fontSize: '11px', color: '#00aaff' }).setOrigin(0, 0.5);
 
-        // Idle Wiggle
-        this.tweens.add({
-            targets: ball, angle: { from: -10, to: 10 },
-            duration: 200, yoyo: true, repeat: -1,
-            hold: 1500 + Math.random() * 2000, delay: Math.random() * 2000
-        });
-
         beltBalls[name.toLowerCase()] = { ball, label, y: yPos, fullName: name };
     });
 
-    // Initial Test Sequences
+    // Test sequence
     this.time.delayedCall(1500, () => deploy('smeargle', 'CODING'));
-    this.time.delayedCall(4500, () => deploy('unown', 'SYSTEM'));
+    this.time.delayedCall(5000, () => deploy('rotom', 'LEGACY'));
 }
 
 function deploy(agentKey, nodeKey) {
@@ -147,23 +139,18 @@ function startBattle(agentKey, nodeKey) {
 
     updateLog(fullName, node.name, 'EXE_ATTACK');
 
-    // Load Enemy Sprite
-    const enemy = scene.add.image(node.x + 50, node.y, node.enemy).setScale(0.8);
-    
-    // Health Bar
+    const enemy = scene.add.image(node.x + 50, node.y, node.enemy).setScale(0.7);
     const hbBg = scene.add.rectangle(node.x + 50, node.y - 65, 80, 6, 0x112244);
     const hbFill = scene.add.rectangle(node.x + 50, node.y - 65, 80, 6, 0x00ffaa);
-
-    // Agent Sprite
     const poke = scene.add.image(node.x - 50, node.y, agentKey).setScale(1);
 
     activeBattles[agentKey] = { poke, enemy, hbFill, hbBg, nodeKey, fullName };
 
     scene.tweens.add({
-        targets: poke, x: '+=30', duration: 180, yoyo: true, repeat: -1,
+        targets: poke, x: '+=20', duration: 150, yoyo: true, repeat: -1,
         onYoyo: () => {
             if (hbFill.scaleX > 0) {
-                hbFill.scaleX -= 0.04;
+                hbFill.scaleX -= 0.05;
                 enemy.setTint(0xff0000);
                 scene.time.delayedCall(50, () => enemy.clearTint());
             } else {
@@ -193,7 +180,7 @@ function finishBattle(agentKey) {
 }
 
 function update() {
-    this.blue.y = 300 + Math.sin(this.time.now / 800) * 8;
+    this.blue.y = 300 + Math.sin(this.time.now / 800) * 5;
 }
 </script>
 </body>
