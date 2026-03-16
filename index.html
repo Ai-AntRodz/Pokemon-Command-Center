@@ -2,140 +2,198 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>OpenClaw Command Center</title>
+    <title>OpenClaw Tactical Command</title>
     <style>
-        body { margin: 0; background: #01050a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        canvas { border: 2px solid #00aaff; box-shadow: 0 0 20px #00aaff33; }
-        #terminal { position: absolute; bottom: 15px; right: 15px; width: 250px; height: 100px; background: rgba(0,10,25,0.9); border: 1px solid #00aaff; color: #00aaff; font-family: monospace; font-size: 10px; padding: 10px; pointer-events: none; overflow: hidden; }
+        :root { --neon-blue: #00d2ff; --dark-bg: #000a14; --panel-bg: rgba(0, 20, 40, 0.9); }
+        body { margin: 0; background: var(--dark-bg); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', 'Courier New', monospace; }
+        
+        /* Scanline Effect Overlay */
+        body::before {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10; background-size: 100% 2px, 3px 100%; pointer-events: none;
+        }
+
+        canvas { border: 2px solid var(--neon-blue); box-shadow: 0 0 25px rgba(0, 210, 255, 0.2); border-radius: 4px; }
+
+        #ui-layer { position: absolute; width: 800px; height: 600px; pointer-events: none; }
+        
+        #terminal {
+            position: absolute; bottom: 20px; right: 20px; width: 260px; height: 130px;
+            background: var(--panel-bg); border: 1px solid var(--neon-blue);
+            color: var(--neon-blue); padding: 10px; font-size: 11px; clip-path: polygon(0 0, 100% 0, 100% 85%, 90% 100%, 0 100%);
+        }
+
+        .log-entry { margin-bottom: 4px; border-left: 2px solid var(--neon-blue); padding-left: 8px; animation: blink 0.1s ease-in; }
+        @keyframes blink { from { opacity: 0; } to { opacity: 1; } }
+
+        #header {
+            position: absolute; top: 20px; left: 20px; color: var(--neon-blue);
+            text-transform: uppercase; letter-spacing: 3px; border-left: 4px solid var(--neon-blue); padding-left: 15px;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 </head>
 <body>
-<div id="terminal"><div id="log"></div></div>
+
+<div id="ui-layer">
+    <div id="header">
+        <div style="font-size: 22px; font-weight: 900;">OpenClaw <span style="color: #fff;">Unit-02</span></div>
+        <div style="font-size: 10px; opacity: 0.8;">Sector: Blue Protocol | Signal: Stable</div>
+    </div>
+
+    <div id="terminal">
+        <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">COMBAT_DATA_FEED</div>
+        <div id="log-content"></div>
+    </div>
+</div>
+
 <script>
+const logContent = document.getElementById('log-content');
+function addLog(msg) {
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerText = `[${new Date().toLocaleTimeString([], {hour12:false})}] ${msg}`;
+    logContent.prepend(entry);
+    if(logContent.children.length > 5) logContent.lastChild.remove();
+}
+
 const config = {
     type: Phaser.AUTO,
     width: 800,
     height: 600,
     pixelArt: true,
+    transparent: true,
     scene: { preload: preload, create: create, update: update }
 };
 
 const game = new Phaser.Game(config);
 
-// Force specific sizes for problematic GIFs
 const SCALES = {
-    'snorlax': {w:60, h:60}, 
-    'rotom': {w:50, h:50}, 
-    'unown': {w:45, h:45},
-    'smeargle': {w:55, h:55}, 
-    'mewtwo': {w:60, h:80}, 
-    'ditto': {w:50, h:45},
-    'coding': {w:65, h:65},  // Laptop Scale
-    'floppy': {w:40, h:40},  // Hard Small Scale for Floppy
-    'terminal': {w:80, h:80},
-    'blue': {w:70, h:90}
+    'blue': {w:110, h:140},
+    'snorlax': {w:65, h:65}, 'rotom': {w:55, h:55}, 'unown': {w:45, h:45},
+    'smeargle': {w:60, h:60}, 'mewtwo': {w:75, h:95}, 'ditto': {w:55, h:50},
+    'coding': {w:70, h:70}, 'floppy': {w:45, h:45}, 'terminal': {w:90, h:90}, 'www': {w:85, h:65}
 };
 
 const AGENTS = ['snorlax', 'rotom', 'unown', 'smeargle', 'mewtwo', 'ditto'];
-const NODES = {
-    LAPTOP: { key: 'coding', x: 250, y: 160 },
-    FLOPPY: { key: 'floppy', x: 550, y: 160 },
-    TERM:   { key: 'terminal', x: 400, y: 460 }
+const TASKS = {
+    A: { key: 'coding', x: 220, y: 160 },
+    B: { key: 'floppy', x: 580, y: 160 },
+    C: { key: 'www',    x: 220, y: 440 },
+    D: { key: 'terminal', x: 580, y: 440 }
 };
 
 function preload() {
     const path = 'gifs-Sprites/';
-    const cb = '?v=' + Date.now(); // Cache Buster to force new names
-
-    this.load.image('blue', path + 'trainerblue.gif' + cb);
+    const v = "?v=" + Date.now();
+    
+    this.load.image('blue', path + 'trainerblue.gif' + v);
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     
-    // Load lowercase names per your update
-    AGENTS.forEach(a => this.load.image(a, path + a + '.gif' + cb));
-    this.load.image('coding', path + 'coding.gif' + cb);
-    this.load.image('floppy', path + 'floppy.gif' + cb);
-    this.load.image('terminal', path + 'terminal.webp' + cb);
-
-    this.load.on('loaderror', (file) => console.warn("Asset skipped:", file.key));
+    AGENTS.forEach(a => this.load.image(a, path + a + '.gif' + v));
+    this.load.image('coding', path + 'coding.gif' + v);
+    this.load.image('floppy', path + 'floppy.gif' + v);
+    this.load.image('terminal', path + 'terminal.webp' + v);
+    this.load.image('www', path + 'www.gif' + v);
 }
 
 let belt = {};
-let tasks = {};
+let activeNodes = {};
 
 function create() {
-    this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00aaff, 0.1);
+    addLog("OS_LOADED...");
+    
+    // Cyber Grid
+    this.add.grid(400, 300, 800, 600, 40, 40, 0x000000, 0, 0x00d2ff, 0.05);
+
+    // Central Blue Unit
     this.blue = this.add.image(400, 300, 'blue').setDisplaySize(SCALES.blue.w, SCALES.blue.h);
 
+    // Sidebar Deployment Belt
     AGENTS.forEach((a, i) => {
-        const y = 80 + (i * 85);
-        const ball = this.add.image(50, y, 'ball').setDisplaySize(25, 25);
-        const txt = this.add.text(80, y, a.toUpperCase(), {fontSize:'10px', color:'#00aaff'}).setOrigin(0,0.5);
-        belt[a] = { ball, txt, y, busy: false };
+        const y = 85 + (i * 85);
+        const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
+        const name = this.add.text(80, y, a.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
+        belt[a] = { ball, name, y, busy: false };
     });
 
-    this.time.addEvent({ delay: 3000, callback: manager, callbackScope: this, loop: true });
+    this.time.addEvent({ delay: 3500, callback: dispatcher, callbackScope: this, loop: true });
 }
 
-function manager() {
+function dispatcher() {
     const freeAgent = AGENTS.find(a => !belt[a].busy);
-    const freeNode = Object.keys(NODES).find(n => !tasks[n]);
-    if (freeAgent && freeNode) deploy(freeAgent, freeNode);
+    const freeNodeKey = Object.keys(TASKS).find(k => !activeNodes[k]);
+
+    if (freeAgent && freeNodeKey) {
+        execute(freeAgent, freeNodeKey);
+    }
 }
 
-function deploy(aKey, nKey) {
-    const node = NODES[nKey];
+function execute(aKey, nKey) {
+    const node = TASKS[nKey];
     belt[aKey].busy = true;
-    tasks[nKey] = true;
+    activeNodes[nKey] = true;
     belt[aKey].ball.setAlpha(0.2);
 
-    const ball = this.add.image(50, belt[aKey].y, 'ball').setDisplaySize(25, 25);
+    addLog(`DEPLOYING ${aKey.toUpperCase()}`);
+
+    const ball = this.add.image(50, belt[aKey].y, 'ball').setDisplaySize(28, 28);
     this.tweens.add({
-        targets: ball, x: node.x, y: node.y, angle: 360, duration: 600,
-        onComplete: () => { ball.destroy(); start(aKey, nKey); }
+        targets: ball, x: node.x, y: node.y, angle: 360, duration: 700, ease: 'Cubic.out',
+        onComplete: () => {
+            ball.destroy();
+            combat.call(this, aKey, nKey);
+        }
     });
 }
 
-function start(aKey, nKey) {
-    const n = NODES[nKey];
-    const eS = SCALES[n.key];
+function combat(aKey, nKey) {
+    const node = TASKS[nKey];
+    const eS = SCALES[node.key];
     const pS = SCALES[aKey];
 
-    const enemy = this.add.image(n.x + 50, n.y, n.key).setDisplaySize(eS.w, eS.h);
-    const agent = this.add.image(n.x - 50, n.y, aKey).setDisplaySize(pS.w, pS.h);
+    const enemy = this.add.image(node.x + 50, node.y, node.key).setDisplaySize(eS.w, eS.h);
+    const agent = this.add.image(node.x - 50, node.y, aKey).setDisplaySize(pS.w, pS.h);
     
-    // UI: Persistent Health Bar Reset
-    const bg = this.add.rectangle(n.x + 50, n.y - (eS.h/2 + 10), 60, 4, 0x112244);
-    const hb = this.add.rectangle(n.x + 50, n.y - (eS.h/2 + 10), 60, 4, 0x00ffaa);
+    // Health Bar HUD
+    const barW = 60;
+    const bg = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), barW, 4, 0x002244);
+    const hp = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), barW, 4, 0x00d2ff);
 
     this.tweens.add({
-        targets: agent, x: '+=20', duration: 200, yoyo: true, repeat: -1,
+        targets: agent, x: '+=20', duration: 180, yoyo: true, repeat: -1,
         onYoyo: () => {
-            hb.width -= 10;
-            enemy.setTint(0x00aaff);
+            hp.width -= 10;
+            enemy.setTint(0x00d2ff);
             this.time.delayedCall(50, () => enemy.clearTint());
-            if (hb.width <= 0) {
+            
+            if (hp.width <= 0) {
+                addLog(`TARGET_CLEARED`);
                 this.tweens.killTweensOf(agent);
-                enemy.destroy(); hb.destroy(); bg.destroy();
-                exit(aKey, nKey, agent);
+                enemy.destroy(); hp.destroy(); bg.destroy();
+                recall.call(this, aKey, nKey, agent);
             }
         }
     });
 }
 
-function exit(aKey, nKey, sprite) {
+function recall(aKey, nKey, sprite) {
     this.tweens.add({
         targets: sprite, x: 50, y: belt[aKey].y, alpha: 0, scale: 0, duration: 600,
         onComplete: () => {
             sprite.destroy();
             belt[aKey].busy = false;
             belt[aKey].ball.setAlpha(1);
-            delete tasks[nKey];
+            delete activeNodes[nKey];
         }
     });
 }
 
-function update() { this.blue.y = 300 + Math.sin(this.time.now / 1000) * 5; }
+function update() {
+    this.blue.y = 300 + Math.sin(this.time.now / 1000) * 10;
+    this.blue.alpha = 0.8 + Math.abs(Math.sin(this.time.now / 2000)) * 0.2;
+}
 </script>
 </body>
 </html>
