@@ -38,7 +38,7 @@
 <div id="ui-layer">
     <div id="header">
         <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">STRATEGY_MODE: ASSIGNED_TARGETS</div>
+        <div style="font-size: 10px; opacity: 0.8;">LINK_STATUS: STABLE</div>
     </div>
     <div id="terminal">
         <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
@@ -57,23 +57,23 @@ function addLog(msg) {
 }
 
 // --- TARGETING LOGIC ---
-// Define which Pokémon ID attacks which Enemy ID
 const ASSIGNMENTS = {
     'mewtwo': 'coding',
     'rotom': 'terminal',
     'ditto': 'floppy',
     'unown': 'www',
-    'snorlax': 'dummy', // Placeholder Target
-    'smeargle': 'dummy' // Placeholder Target
+    'snorlax': 'dummy',
+    'smeargle': 'dummy'
 };
 
+// --- MASTER LISTS (Set W/H to null for original size) ---
 const POKEMON_LIST = [
-    { id: 'snorlax', file: 'snorlax.gif',   w: 60, h: 60 },
-    { id: 'rotom',   file: 'rotom.gif',     w: 50, h: 50 },
-    { id: 'unown',   file: 'unown.gif',     w: 45, h: 45 },
-    { id: 'smeargle',file: 'smeargle.gif',  w: 55, h: 55 },
-    { id: 'mewtwo',  file: 'mewtwo.gif',    w: 70, h: 90 },
-    { id: 'ditto',   file: 'ditto.gif',     w: 55, h: 50 }
+    { id: 'snorlax', file: 'snorlax.gif',   w: null, h: null },
+    { id: 'rotom',   file: 'rotom.gif',     w: null, h: null },
+    { id: 'unown',   file: 'unown.gif',     w: null, h: null },
+    { id: 'smeargle',file: 'smeargle.gif',  w: null, h: null },
+    { id: 'mewtwo',  file: 'mewtwo.gif',    w: null, h: null },
+    { id: 'ditto',   file: 'ditto.gif',     w: null, h: null }
 ];
 
 const ENEMY_LIST = [
@@ -81,7 +81,7 @@ const ENEMY_LIST = [
     { id: 'floppy',  file: 'floppy.gif',    w: 35, h: 35, x: 580, y: 160 },
     { id: 'www',     file: 'www.gif',       w: 80, h: 60, x: 220, y: 440 },
     { id: 'terminal',file: 'terminal.webp', w: 85, h: 85, x: 580, y: 440 },
-    { id: 'dummy',   file: 'ball',          w: 40, h: 40, x: 400, y: 450 } // Hidden/Visual Test target
+    { id: 'dummy',   file: 'ball',          w: 40, h: 40, x: 400, y: 450 } 
 ];
 
 const config = {
@@ -98,27 +98,22 @@ function preload() {
     const baseUrl = window.location.href.replace('index.html', '');
     const assetPath = 'gifs-Sprites/';
     this.load.setPath(baseUrl + assetPath);
-    
     const v = "?v=" + Date.now();
-    this.load.image('blue', 'trainerblue.gif' + v);
     
+    this.load.image('blue', 'trainerblue.gif' + v);
     this.load.setPath(''); 
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     this.load.setPath(baseUrl + assetPath);
     
     POKEMON_LIST.forEach(p => this.load.image(p.id, p.file + v));
-    ENEMY_LIST.forEach(e => {
-        if(e.id !== 'dummy') this.load.image(e.id, e.file + v);
-    });
-
-    this.load.on('loaderror', (file) => addLog(`ERR: ${file.key} FAIL`));
+    ENEMY_LIST.forEach(e => { if(e.id !== 'dummy') this.load.image(e.id, e.file + v); });
 }
 
 let belt = {};
 let activeNodes = {};
 
 function create() {
-    addLog("TARGETING_SYSTEM_ONLINE");
+    addLog("OS_V12_LOADED");
     this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
     this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
 
@@ -126,14 +121,15 @@ function create() {
         const y = 85 + (i * 85);
         const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
         
-        // --- IDLE SHAKE ANIMATION ---
+        // REFIXED SHAKE: Using a clearer tween
         this.tweens.add({
             targets: ball,
-            angle: { from: -10, to: 10 },
-            duration: 150,
+            angle: 15,
+            duration: 100,
             yoyo: true,
-            repeat: -1,
-            repeatDelay: 2000 + (Math.random() * 3000)
+            repeat: 3,
+            hold: 2000 + (Math.random() * 2000),
+            repeatDelay: 1000
         });
 
         const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
@@ -147,8 +143,6 @@ function strategicDispatch() {
     POKEMON_LIST.forEach(p => {
         const targetId = ASSIGNMENTS[p.id];
         const targetNode = ENEMY_LIST.find(e => e.id === targetId);
-        
-        // Dispatch if Pokémon is free AND target node is free
         if (!belt[p.id].busy && !activeNodes[targetId]) {
             launchMission.call(this, p.id, targetNode);
         }
@@ -159,8 +153,7 @@ function launchMission(aId, node) {
     belt[aId].busy = true;
     activeNodes[node.id] = true;
     belt[aId].ball.setAlpha(0.2);
-    
-    addLog(`ENGAGING: ${aId.toUpperCase()} -> ${node.id.toUpperCase()}`);
+    addLog(`DEPLOY: ${aId.toUpperCase()}`);
 
     const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
     this.tweens.add({
@@ -179,22 +172,24 @@ function beginBattle(aId, node) {
     const enemyImg = (node.id === 'dummy' || !this.textures.exists(node.id)) ? 'ball' : node.id;
     const pokeImg = this.textures.exists(aId) ? aId : 'ball';
 
-    const enemy = this.add.image(node.x + 50, node.y, enemyImg).setDisplaySize(node.w, node.h);
-    const poke = this.add.image(node.x - 50, node.y, pokeImg).setDisplaySize(pConf.w, pConf.h);
+    const enemy = this.add.image(node.x + 50, node.y, enemyImg);
+    const poke = this.add.image(node.x - 50, node.y, pokeImg);
+
+    // Apply scaling ONLY if defined, else use original size
+    if (node.w && node.h) enemy.setDisplaySize(node.w, node.h);
+    if (pConf.w && pConf.h) poke.setDisplaySize(pConf.w, pConf.h);
     
-    const bg = this.add.rectangle(node.x + 50, node.y - (node.h/2 + 12), 60, 4, 0x002244);
-    const hp = this.add.rectangle(node.x + 50, node.y - (node.h/2 + 12), 60, 4, 0x00d2ff);
+    const hY = node.h ? node.h : 50; // Fallback for HP position
+    const bg = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x002244);
+    const hp = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x00d2ff);
 
     const combatTween = this.tweens.add({
         targets: poke, x: '+=30', duration: 200, yoyo: true, repeat: -1,
         onYoyo: () => {
             if (hp && hp.active && hp.width > 0) {
                 hp.width -= 15;
-                
-                // HIT ANIMATION
                 const spark = this.add.star(node.x + 40, node.y, 5, 2, 8, 0x00d2ff);
                 this.tweens.add({ targets: spark, scale: 2, alpha: 0, duration: 150, onComplete: () => spark.destroy() });
-
                 if (enemy && enemy.active) {
                     enemy.setTint(0x00d2ff);
                     this.time.delayedCall(50, () => { if(enemy && enemy.active) enemy.clearTint(); });
@@ -202,7 +197,7 @@ function beginBattle(aId, node) {
             }
             if (hp && hp.width <= 0) {
                 combatTween.stop();
-                addLog(`SECURED: ${node.id.toUpperCase()}`);
+                addLog(`TARGET_DOWN: ${node.id.toUpperCase()}`);
                 this.cameras.main.shake(150, 0.005); 
                 if(enemy) enemy.destroy(); 
                 if(hp) hp.destroy(); 
@@ -215,10 +210,8 @@ function beginBattle(aId, node) {
 
 function retreat(aId, nodeId, sprite) {
     if(!sprite || !sprite.active) {
-        belt[aId].busy = false;
-        belt[aId].ball.setAlpha(1);
-        delete activeNodes[nodeId];
-        return;
+        belt[aId].busy = false; belt[aId].ball.setAlpha(1);
+        delete activeNodes[nodeId]; return;
     }
     this.tweens.add({
         targets: sprite, x: 50, y: belt[aId].y, alpha: 0, scale: 0, duration: 600,
