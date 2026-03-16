@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OpenClaw Tactical Command</title>
+    <style>
+        body { margin: 0; background: #010801; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { image-rendering: pixelated; border: 4px solid #111; box-shadow: 0 0 40px #0f02; }
+        
+        /* Tactical HUD Overlays */
+        #hud-top { position: absolute; top: 20px; left: 20px; color: #0f0; font-family: 'Courier New', monospace; pointer-events: none; }
+        
+        /* The New Terminal Box */
+        #terminal-box { 
+            position: absolute; 
+            bottom: 25px; 
+            right: 25px; 
+            width: 280px; 
+            height: 120px; 
+            background: rgba(0, 20, 0, 0.9); 
+            border: 2px solid #0f0; 
+            color: #0f0; 
+            font-family: 'Courier New', monospace; 
+            font-size: 11px; 
+            padding: 10px; 
+            overflow: hidden;
+            box-shadow: 0 0 15px #0f04;
+        }
+        .log-entry { margin-bottom: 4px; border-left: 2px solid #0f0; padding-left: 5px; animation: blink 0.1s; }
+        @keyframes blink { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+<body>
+
+<div id="hud-top">
+    <div style="font-size: 18px; letter-spacing: 2px;">BRAIN_UNIT: <span style="color:#fff">RED</span></div>
+    <div style="font-size: 10px; color: #4a4;">LOCATION: SECTOR_01_ARENA</div>
+</div>
+
+<div id="terminal-box" id="term">
+    <div style="border-bottom: 1px solid #0f0; margin-bottom: 5px; font-weight: bold;">[ AGENT_LOG_STREAM ]</div>
+    <div id="log-content"></div>
+</div>
+
+<script>
+// Terminal Logging Logic
+const logContent = document.getElementById('log-content');
+function updateLog(agent, task, status) {
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    const time = new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+    entry.innerHTML = `[${time}] ${agent.toUpperCase()}: ${status} -> ${task}`;
+    logContent.prepend(entry); // Newest on top
+    if (logContent.children.length > 5) logContent.lastChild.remove();
+}
+
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    pixelArt: true,
+    scene: { preload: preload, create: create, update: update }
+};
+
+const game = new Phaser.Game(config);
+
+const NODES = {
+    ART:  { x: 220, y: 150, name: 'GRAPHIC_DESIGN', color: 0xff00ff },
+    WEB:  { x: 580, y: 150, name: 'RESEARCH_WEB', color: 0x00ffff },
+    BASH: { x: 400, y: 480, name: 'INFRA_BASH', color: 0x00ff00 }
+};
+
+function preload() {
+    this.load.spritesheet('red', 'https://raw.githubusercontent.com/itssay7/assets/main/images/sprites/trainer_red.png', { frameWidth: 16, frameHeight: 16 });
+    this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
+    this.load.image('smeargle', 'smeargleOn.gif');
+    this.load.image('unown', 'unown-aOn.gif');
+    this.load.image('rotom', 'rotomOn.gif');
+    this.load.image('snorlax', 'snorlaxOn.gif');
+    this.load.image('mewtwo', 'mewtwoOn.gif');
+}
+
+let beltBalls = {};
+let activeBattles = {};
+
+function create() {
+    const scene = this;
+
+    // Grid Background
+    const g = this.add.graphics();
+    g.lineStyle(1, 0x00ff00, 0.05);
+    for(let i=0; i<800; i+=40) g.lineBetween(i, 0, i, 600);
+    for(let i=0; i<600; i+=40) g.lineBetween(0, i, 800, i);
+
+    this.red = this.add.sprite(400, 300, 'red', 0).setScale(5);
+
+    // Sidebar Belt
+    const agentList = ['Snorlax', 'Rotom', 'Unknown_A', 'Smeargle', 'Mewtwo'];
+    agentList.forEach((name, i) => {
+        const yPos = 80 + (i * 110);
+        const ball = this.add.image(50, yPos, 'ball').setScale(2);
+        const label = this.add.text(85, yPos, name.toUpperCase(), { fontSize: '11px', color: '#0f0' }).setOrigin(0, 0.5);
+
+        // Idle Wiggle
+        this.tweens.add({
+            targets: ball,
+            angle: { from: -10, to: 10 },
+            duration: 200, yoyo: true, repeat: -1,
+            hold: 1000 + Math.random() * 2000,
+            delay: Math.random() * 2000
+        });
+
+        beltBalls[name.toLowerCase().replace('_a', '')] = { ball, label, y: yPos, fullName: name };
+    });
+
+    // --- Demo Script ---
+    this.time.delayedCall(1500, () => deploy('smeargle', 'ART'));
+    this.time.delayedCall(4500, () => deploy('rotom', 'BASH'));
+}
+
+function deploy(agentKey, nodeKey) {
+    const scene = game.scene.scenes[0];
+    const node = NODES[nodeKey];
+    const beltItem = beltBalls[agentKey];
+    
+    updateLog(beltItem.fullName, node.name, 'DEPLOYING');
+
+    beltItem.ball.setVisible(false);
+    beltItem.label.setAlpha(0.2);
+
+    const flyBall = scene.add.image(50, beltItem.y, 'ball').setScale(2);
+    scene.tweens.add({
+        targets: flyBall,
+        x: node.x, y: node.y,
+        angle: 720,
+        duration: 800,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+            flyBall.destroy();
+            startBattle(agentKey, nodeKey);
+        }
+    });
+}
+
+function startBattle(agentKey, nodeKey) {
+    const scene = game.scene.scenes[0];
+    const node = NODES[nodeKey];
+    const fullName = beltBalls[agentKey].fullName;
+
+    updateLog(fullName, node.name, 'ENGAGING');
+
+    const monster = scene.add.graphics();
+    drawEnemy(monster, nodeKey, node.color);
+    monster.setPosition(node.x + 50, node.y);
+
+    const hbBg = scene.add.rectangle(node.x + 50, node.y - 60, 80, 6, 0x333333);
+    const hbFill = scene.add.rectangle(node.x + 50, node.y - 60, 80, 6, 0x00ff00);
+
+    const poke = scene.add.image(node.x - 50, node.y, agentKey).setScale(1.2);
+
+    activeBattles[agentKey] = { poke, monster, hbFill, hbBg, nodeKey, fullName };
+
+    scene.tweens.add({
+        targets: poke,
+        x: '+=30',
+        duration: 150,
+        yoyo: true,
+        repeat: -1,
+        onYoyo: () => {
+            if (hbFill.scaleX > 0) {
+                hbFill.scaleX -= 0.02; // Slower for visibility
+                monster.alpha = 0.5;
+                scene.time.delayedCall(50, () => monster.alpha = 1);
+            } else {
+                finishBattle(agentKey);
+            }
+        }
+    });
+}
+
+function finishBattle(agentKey) {
+    const scene = game.scene.scenes[0];
+    const b = activeBattles[agentKey];
+    const node = NODES[b.nodeKey];
+
+    updateLog(b.fullName, node.name, 'COMPLETED');
+
+    b.monster.destroy();
+    b.hbFill.destroy();
+    b.hbBg.destroy();
+
+    scene.tweens.add({
+        targets: b.poke,
+        x: 50, y: beltBalls[agentKey].y,
+        scale: 0.1, alpha: 0,
+        duration: 700,
+        onComplete: () => {
+            b.poke.destroy();
+            beltBalls[agentKey].ball.setVisible(true);
+            beltBalls[agentKey].label.setAlpha(1);
+            delete activeBattles[agentKey];
+        }
+    });
+}
+
+function drawEnemy(g, type, color) {
+    g.fillStyle(color, 0.8);
+    if(type === 'ART') {
+        g.fillRect(-30, -30, 60, 60);
+        g.fillStyle(0xffffff); g.fillRect(-24, -24, 48, 48); // Canvas
+    } else if(type === 'BASH') {
+        g.lineStyle(2, 0x00ff00); g.strokeRect(-30, -25, 60, 50); // Terminal
+    } else {
+        g.fillCircle(0, 0, 30);
+    }
+}
+
+function update() {
+    this.red.y = 300 + Math.sin(this.time.now / 600) * 10;
+}
+</script>
+</body>
+</html>
