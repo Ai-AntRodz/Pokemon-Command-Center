@@ -60,25 +60,26 @@ const NODES = {
 };
 
 function preload() {
-    // Correctly routing to your 'gifs-Sprites' folder
-    // Central Unit
-    this.load.image('blue', 'gifs-Sprites/trainerblue.gif'); //
+    // FOLDER PATH: gifs-Sprites/
     
-    // Tactical Assets
+    // Central Unit
+    this.load.image('blue', 'gifs-Sprites/trainerblue.gif'); 
+    
+    // Tactical Assets (External)
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     
-    // Agent GIFs 
-    this.load.image('smeargle', 'gifs-Sprites/smeargleOn.gif'); //
-    this.load.image('unown', 'gifs-Sprites/unown-aOn.gif'); //
-    this.load.image('rotom', 'gifs-Sprites/rotomOn.gif'); //
-    this.load.image('snorlax', 'gifs-Sprites/snorlaxOn.gif'); //
-    this.load.image('mewtwo', 'gifs-Sprites/mewtwoOn.gif'); //
-    this.load.image('ditto', 'gifs-Sprites/dittoOn.gif'); //
+    // Agent GIFs
+    this.load.image('smeargle', 'gifs-Sprites/smeargleOn.gif'); 
+    this.load.image('unown', 'gifs-Sprites/unown-aOn.gif'); 
+    this.load.image('rotom', 'gifs-Sprites/rotomOn.gif'); 
+    this.load.image('snorlax', 'gifs-Sprites/snorlaxOn.gif'); 
+    this.load.image('mewtwo', 'gifs-Sprites/mewtwoOn.gif'); 
+    this.load.image('ditto', 'gifs-Sprites/dittoOn.gif'); 
 
     // Enemy GIFs
-    this.load.image('codingOn', 'gifs-Sprites/codingOn.gif'); //
-    this.load.image('FLOPPYOn', 'gifs-Sprites/FLOPPYOn.gif'); //
-    this.load.image('terminalOnTest', 'gifs-Sprites/terminalOnTest.webp'); //
+    this.load.image('codingOn', 'gifs-Sprites/codingOn.gif'); 
+    this.load.image('FLOPPYOn', 'gifs-Sprites/FLOPPYOn.gif'); 
+    this.load.image('terminalOnTest', 'gifs-Sprites/terminalOnTest.webp'); 
 }
 
 let beltBalls = {};
@@ -106,9 +107,9 @@ function create() {
         beltBalls[name.toLowerCase()] = { ball, label, y: yPos, fullName: name };
     });
 
-    // Test sequence
+    // Deploy sequence
     this.time.delayedCall(1500, () => deploy('smeargle', 'CODING'));
-    this.time.delayedCall(5000, () => deploy('rotom', 'LEGACY'));
+    this.time.delayedCall(5000, () => deploy('unown', 'SYSTEM'));
 }
 
 function deploy(agentKey, nodeKey) {
