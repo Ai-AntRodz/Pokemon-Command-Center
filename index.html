@@ -38,7 +38,7 @@
 <div id="ui-layer">
     <div id="header">
         <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">DISPATCH: SEQUENTIAL_SYNC</div>
+        <div style="font-size: 10px; opacity: 0.8;">LINK_ESTABLISHED: DATA_SYNC</div>
     </div>
     <div id="terminal">
         <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
@@ -50,19 +50,14 @@
 const logContent = document.getElementById('log-content');
 function addLog(msg) {
     const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    entry.innerText = `> ${msg}`;
+    entry.className = 'log-entry'; entry.innerText = `> ${msg}`;
     logContent.prepend(entry);
     if(logContent.children.length > 5) logContent.lastChild.remove();
 }
 
 const ASSIGNMENTS = {
-    'mewtwo': 'coding',
-    'rotom': 'terminal',
-    'ditto': 'floppy',
-    'unown': 'www',
-    'snorlax': 'dummy',
-    'smeargle': 'dummy'
+    'mewtwo': 'coding', 'rotom': 'terminal', 'ditto': 'floppy',
+    'unown': 'www', 'snorlax': 'dummy', 'smeargle': 'dummy'
 };
 
 const POKEMON_LIST = [
@@ -83,10 +78,7 @@ const ENEMY_LIST = [
 ];
 
 const config = {
-    type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    pixelArt: true,
+    type: Phaser.AUTO, width: 800, height: 600, pixelArt: true,
     scene: { preload: preload, create: create, update: update }
 };
 
@@ -107,10 +99,11 @@ function preload() {
 
 let belt = {};
 let activeNodes = {};
-let isDispatching = false; // Prevents simultaneous launches
+let nextLaunchTime = 0;
+let links = []; // Store visual links
 
 function create() {
-    addLog("SYSTEM_READY");
+    addLog("OS_V16_UPGRADED");
     this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
     this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
 
@@ -118,24 +111,53 @@ function create() {
         const y = 85 + (i * 85);
         const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
         const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
-        
         belt[p.id] = { ball, nameText, y, busy: false };
     });
-
-    this.time.addEvent({ delay: 2000, callback: strategicDispatch, callbackScope: this, loop: true });
 }
 
-function strategicDispatch() {
-    if (isDispatching) return; // Wait until current launch is done
+function createPulse(scene, x, y) {
+    for (let i = 0; i < 3; i++) {
+        const ring = scene.add.circle(x, y, 10, 0x00d2ff, 0).setStrokeStyle(2, 0x00d2ff);
+        scene.tweens.add({
+            targets: ring, radius: 40, alpha: { from: 0.8, to: 0 }, delay: i * 200, duration: 800,
+            onComplete: () => ring.destroy()
+        });
+    }
+}
 
-    for (let p of POKEMON_LIST) {
-        const targetId = ASSIGNMENTS[p.id];
-        const targetNode = ENEMY_LIST.find(e => e.id === targetId);
-        
-        if (!belt[p.id].busy && !activeNodes[targetId]) {
-            isDispatching = true; 
-            launchMission.call(this, p.id, targetNode);
-            break; // Stop loop so only ONE launches at a time
+function update(time) {
+    if(this.blue) this.blue.y = 300 + Math.sin(time / 1000) * 10;
+
+    // Drawing Active Data Links
+    links.forEach(l => {
+        l.graphics.clear();
+        l.graphics.lineStyle(1, 0x00d2ff, Math.random() * 0.5 + 0.1);
+        l.graphics.lineBetween(this.blue.x, this.blue.y - 20, l.target.x, l.target.y);
+    });
+
+    POKEMON_LIST.forEach(p => {
+        const agent = belt[p.id];
+        if (agent) {
+            if (!agent.busy) {
+                agent.ball.angle = Math.sin(time / 80) * 15;
+                agent.ball.alpha = 1.0; 
+            } else {
+                agent.ball.angle = 0;
+                agent.ball.alpha = 0.2; 
+            }
+        }
+    });
+
+    if (time > nextLaunchTime) {
+        for (let p of POKEMON_LIST) {
+            const targetId = ASSIGNMENTS[p.id];
+            const targetNode = ENEMY_LIST.find(e => e.id === targetId);
+            if (!belt[p.id].busy && !activeNodes[targetId]) {
+                nextLaunchTime = time + 3500;
+                createPulse(this, 50, belt[p.id].y); 
+                this.time.delayedCall(800, () => launchMission.call(this, p.id, targetNode));
+                break; 
+            }
         }
     }
 }
@@ -143,17 +165,13 @@ function strategicDispatch() {
 function launchMission(aId, node) {
     belt[aId].busy = true;
     activeNodes[node.id] = true;
-    belt[aId].ball.setAlpha(0.2);
-    belt[aId].ball.setAngle(0); // Reset angle when deploying
-    
-    addLog(`DEPLOY: ${aId.toUpperCase()}`);
+    addLog(`SYNC_START: ${aId.toUpperCase()}`);
 
     const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
     this.tweens.add({
-        targets: ball, x: node.x, y: node.y, angle: 360, duration: 800,
+        targets: ball, x: node.x, y: node.y, angle: 360, duration: 1200, ease: 'Cubic.easeOut',
         onComplete: () => {
             ball.destroy();
-            isDispatching = false; // Allow next launch
             beginBattle.call(this, aId, node);
         }
     });
@@ -166,30 +184,35 @@ function beginBattle(aId, node) {
 
     const enemy = this.add.image(node.x + 50, node.y, enemyImg);
     const poke = this.add.image(node.x - 50, node.y, pokeImg);
+    
+    // Add Link
+    const linkObj = { graphics: this.add.graphics(), target: poke };
+    links.push(linkObj);
 
     if (node.w && node.h) enemy.setDisplaySize(node.w, node.h);
     if (pConf.w && pConf.h) poke.setDisplaySize(pConf.w, pConf.h);
     
-    const hY = node.h ? node.h : 50;
+    const hY = (node.h || 50);
     const bg = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x002244);
     const hp = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x00d2ff);
 
     const combatTween = this.tweens.add({
-        targets: poke, x: '+=30', duration: 200, yoyo: true, repeat: -1,
+        targets: poke, x: '+=30', duration: 400, yoyo: true, repeat: -1,
         onYoyo: () => {
             if (hp && hp.active && hp.width > 0) {
-                hp.width -= 15;
+                hp.width -= 10;
                 const spark = this.add.star(node.x + 40, node.y, 5, 2, 8, 0x00d2ff);
-                this.tweens.add({ targets: spark, scale: 2, alpha: 0, duration: 150, onComplete: () => spark.destroy() });
+                this.tweens.add({ targets: spark, scale: 2, alpha: 0, duration: 250, onComplete: () => spark.destroy() });
                 if (enemy && enemy.active) {
                     enemy.setTint(0x00d2ff);
-                    this.time.delayedCall(50, () => { if(enemy && enemy.active) enemy.clearTint(); });
+                    this.time.delayedCall(100, () => { if(enemy && enemy.active) enemy.clearTint(); });
                 }
             }
             if (hp && hp.width <= 0) {
                 combatTween.stop();
-                addLog(`TARGET_DOWN: ${node.id.toUpperCase()}`);
+                addLog(`TASK_COMPLETE: ${node.id.toUpperCase()}`);
                 this.cameras.main.shake(150, 0.005); 
+                links = links.filter(l => l !== linkObj); linkObj.graphics.destroy();
                 if(enemy) enemy.destroy(); if(hp) hp.destroy(); if(bg) bg.destroy();
                 retreat.call(this, aId, node.id, poke);
             }
@@ -199,33 +222,18 @@ function beginBattle(aId, node) {
 
 function retreat(aId, nodeId, sprite) {
     if(!sprite || !sprite.active) {
-        belt[aId].busy = false; belt[aId].ball.setAlpha(1);
-        delete activeNodes[nodeId]; return;
+        belt[aId].busy = false; delete activeNodes[nodeId]; return;
     }
     this.tweens.add({
-        targets: sprite, x: 50, y: belt[aId].y, alpha: 0, scale: 0, duration: 600,
+        targets: sprite, x: 50, y: belt[aId].y, alpha: 0, scale: 0, duration: 900,
         onComplete: () => {
+            // EXP FLOAT EFFECT
+            const exp = this.add.text(80, belt[aId].y, "+120 EXP", { fontSize: '10px', color: '#fff', fontStyle: 'bold' });
+            this.tweens.add({ targets: exp, y: '-=30', alpha: 0, duration: 1500, onComplete: () => exp.destroy() });
+            
             sprite.destroy();
             belt[aId].busy = false;
-            belt[aId].ball.setAlpha(1);
             delete activeNodes[nodeId];
-        }
-    });
-}
-
-function update(time) {
-    if(this.blue && this.blue.active) {
-        this.blue.y = 300 + Math.sin(time / 1000) * 10;
-    }
-
-    // --- CONDITIONAL IDLE SHAKE ---
-    POKEMON_LIST.forEach(p => {
-        const agent = belt[p.id];
-        if (agent && !agent.busy) {
-            // Only shake if the agent is idle
-            agent.ball.angle = Math.sin(time / 100) * 15; 
-        } else if (agent) {
-            agent.ball.angle = 0; // Keep straight when busy
         }
     });
 }
