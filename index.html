@@ -38,7 +38,7 @@
 <div id="ui-layer">
     <div id="header">
         <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">SHIELD_STATUS: ARMED</div>
+        <div style="font-size: 10px; opacity: 0.8;">OS_VERSION: 11.0_STABLE</div>
     </div>
     <div id="terminal">
         <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
@@ -56,7 +56,7 @@ function addLog(msg) {
     if(logContent.children.length > 5) logContent.lastChild.remove();
 }
 
-// --- MASTER LISTS ---
+// --- MASTER ASSET LISTS ---
 const POKEMON_LIST = [
     { id: 'snorlax', file: 'snorlax.gif',   w: 60, h: 60 },
     { id: 'rotom',   file: 'rotom.gif',     w: 50, h: 50 },
@@ -99,7 +99,7 @@ function preload() {
     POKEMON_LIST.forEach(p => this.load.image(p.id, p.file + v));
     ENEMY_LIST.forEach(e => this.load.image(e.id, e.file + v));
 
-    this.load.on('loaderror', (file) => addLog(`CRITICAL: ${file.key} ERROR`));
+    this.load.on('loaderror', (file) => addLog(`ERR: ${file.key} LOAD_FAIL`));
 }
 
 let belt = {};
@@ -107,7 +107,7 @@ let activeNodes = {};
 let grid;
 
 function create() {
-    addLog("OS_V11_SHIELDED");
+    addLog("SYSTEM_BOOT_SUCCESS");
     grid = this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
     this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
 
@@ -121,40 +121,43 @@ function create() {
     this.time.addEvent({ delay: 3500, callback: autoDispatch, callbackScope: this, loop: true });
 }
 
+function pulseGrid(scene) {
+    scene.tweens.add({
+        targets: grid,
+        outlineAlpha: 0.4,
+        duration: 200,
+        yoyo: true
+    });
+}
+
 function autoDispatch() {
     const freeAgentId = POKEMON_LIST.find(p => !belt[p.id].busy)?.id;
     const freeNode = ENEMY_LIST.find(e => !activeNodes[e.id]);
-
-    if (freeAgentId && freeNode) {
-        launchMission.call(this, freeAgentId, freeNode);
-    }
+    if (freeAgentId && freeNode) launchMission.call(this, freeAgentId, freeNode);
 }
 
 function launchMission(aId, node) {
-    try {
-        belt[aId].busy = true;
-        activeNodes[node.id] = true;
-        belt[aId].ball.setAlpha(0.2);
-        
-        addLog(`SYNC: ${aId.toUpperCase()} -> ${node.id.toUpperCase()}`);
+    belt[aId].busy = true;
+    activeNodes[node.id] = true;
+    belt[aId].ball.setAlpha(0.2);
+    
+    addLog(`SYNC: ${aId.toUpperCase()}`);
+    pulseGrid(this);
 
-        const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
-        this.tweens.add({
-            targets: ball, x: node.x, y: node.y, angle: 360, duration: 800,
-            onComplete: () => {
-                ball.destroy();
-                beginBattle.call(this, aId, node);
-            }
-        });
-    } catch(e) {
-        addLog("LAUNCH_ERR: SKIPPING...");
-        console.error(e);
-    }
+    const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
+    this.tweens.add({
+        targets: ball, x: node.x, y: node.y, angle: 360, duration: 800,
+        onComplete: () => {
+            ball.destroy();
+            beginBattle.call(this, aId, node);
+        }
+    });
 }
 
 function beginBattle(aId, node) {
-    // Safety check for asset presence
     const pConf = POKEMON_LIST.find(p => p.id === aId);
+    if(!pConf) return;
+
     const enemyImg = this.textures.exists(node.id) ? node.id : 'ball';
     const pokeImg = this.textures.exists(aId) ? aId : 'ball';
 
@@ -167,20 +170,20 @@ function beginBattle(aId, node) {
     const combatTween = this.tweens.add({
         targets: poke, x: '+=20', duration: 250, yoyo: true, repeat: -1,
         onYoyo: () => {
-            if (hp.width > 0) {
+            if (hp && hp.active && hp.width > 0) {
                 hp.width -= 15;
-                enemy.setTint(0x00d2ff);
-                this.time.delayedCall(50, () => { if(enemy.active) enemy.clearTint(); });
+                if (enemy && enemy.active) {
+                    enemy.setTint(0x00d2ff);
+                    this.time.delayedCall(50, () => { if(enemy && enemy.active) enemy.clearTint(); });
+                }
             }
-            
-            if (hp.width <= 0 && combatTween.isPlaying()) {
+            if (hp && hp.width <= 0) {
                 combatTween.stop();
                 addLog(`ELIMINATED: ${node.id.toUpperCase()}`);
-                
-                // IMPACT EFFECTS
                 this.cameras.main.shake(150, 0.005); 
-                
-                enemy.destroy(); hp.destroy(); bg.destroy();
+                if(enemy) enemy.destroy(); 
+                if(hp) hp.destroy(); 
+                if(bg) bg.destroy();
                 retreat.call(this, aId, node.id, poke);
             }
         }
@@ -188,6 +191,12 @@ function beginBattle(aId, node) {
 }
 
 function retreat(aId, nodeId, sprite) {
+    if(!sprite || !sprite.active) {
+        belt[aId].busy = false;
+        belt[aId].ball.setAlpha(1);
+        delete activeNodes[nodeId];
+        return;
+    }
     this.tweens.add({
         targets: sprite, x: 50, y: belt[aId].y, alpha: 0, scale: 0, duration: 600,
         onComplete: () => {
@@ -200,7 +209,9 @@ function retreat(aId, nodeId, sprite) {
 }
 
 function update() {
-    if(this.blue) this.blue.y = 300 + Math.sin(this.time.now / 1000) * 10;
+    if(this.blue && this.blue.active) {
+        this.blue.y = 300 + Math.sin(this.time.now / 1000) * 10;
+    }
 }
 </script>
 </body>
