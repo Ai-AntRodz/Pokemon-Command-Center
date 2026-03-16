@@ -2,43 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>OpenClaw Tactical Command - Blue Protocol</title>
+    <title>OpenClaw Command Center</title>
     <style>
         body { margin: 0; background: #01050a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        canvas { image-rendering: pixelated; border: 4px solid #112244; box-shadow: 0 0 40px #0055ff33; }
-        #hud-top { position: absolute; top: 20px; left: 20px; color: #00aaff; font-family: 'Courier New', monospace; pointer-events: none; }
+        canvas { image-rendering: pixelated; border: 4px solid #112244; }
         #terminal-box { 
-            position: absolute; bottom: 25px; right: 25px; width: 300px; height: 140px; 
-            background: rgba(0, 5, 15, 0.9); border: 2px solid #00aaff; color: #00aaff; 
-            font-family: 'Courier New', monospace; font-size: 11px; padding: 10px; overflow: hidden;
+            position: absolute; bottom: 20px; right: 20px; width: 280px; height: 120px; 
+            background: rgba(0, 8, 20, 0.95); border: 1px solid #00aaff; color: #00aaff; 
+            font-family: monospace; font-size: 10px; padding: 8px; overflow: hidden;
         }
-        .log-entry { margin-bottom: 4px; border-left: 2px solid #00aaff; padding-left: 5px; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 </head>
 <body>
 
-<div id="hud-top">
-    <div style="font-size: 18px; letter-spacing: 2px;">PROTOCOL: <span style="color:#fff">BLUE_UNIT</span></div>
-    <div id="status-text" style="font-size: 10px; color: #4488ff;">SYSTEM_READY</div>
-</div>
-
-<div id="terminal-box">
-    <div style="border-bottom: 1px solid #00aaff; margin-bottom: 5px; font-weight: bold; font-size: 10px;">[ LOG_STREAM ]</div>
-    <div id="log-content"></div>
-</div>
+<div id="terminal-box"><div id="log-content"></div></div>
 
 <script>
-function updateLog(agent, task, status) {
-    const logContent = document.getElementById('log-content');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    const time = new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-    entry.innerHTML = `[${time}] ${agent.toUpperCase()}: ${status} >> ${task}`;
-    logContent.prepend(entry);
-    if (logContent.children.length > 6) logContent.lastChild.remove();
-}
-
 const config = {
     type: Phaser.AUTO,
     width: 800,
@@ -49,147 +29,123 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// --- ASSET CONFIGURATION ---
-const NODES = {
-    CODING:  { x: 260, y: 180, name: 'DEV_LAPTOP', enemy: 'codingOn', scale: 0.3 }, // Scale turned WAY down
-    LEGACY:  { x: 540, y: 180, name: 'FLOPPY_DISK', enemy: 'FLOPPYOn', scale: 0.25 }, // Scale turned WAY down
-    SYSTEM:  { x: 400, y: 460, name: 'CMD_TERMINAL', enemy: 'terminalOnTest', scale: 0.5 }
+// --- STRICT FILENAME MAPPING ---
+// I have updated these to match your GitHub folder exactly
+const PATH = 'gifs-Sprites/';
+const AGENTS = [
+    { key: 'snorlax', file: 'snorlaxOn.gif' },
+    { key: 'rotom', file: 'rotomOn.gif' },
+    { key: 'unown', file: 'unown-aOn.gif' },
+    { key: 'smeargle', file: 'smeargleOn.gif' },
+    { key: 'mewtwo', file: 'mewtwoOn.gif' },
+    { key: 'ditto', file: 'dittoOn.gif' }
+];
+
+const ENEMIES = {
+    LAPTOP: { key: 'codingOn', file: 'codingOn.gif', x: 250, y: 150, size: 80 },
+    FLOPPY: { key: 'FLOPPYOn', file: 'FLOPPYOn.gif', x: 550, y: 150, size: 60 },
+    TERM:   { key: 'terminalOnTest', file: 'terminalOnTest.webp', x: 400, y: 480, size: 100 }
 };
 
-const AGENT_SETTINGS = { scale: 0.5 };
-
 function preload() {
-    const path = 'gifs-Sprites/';
-    this.load.image('blue', path + 'trainerblue.gif'); 
+    this.load.image('blue', PATH + 'trainerblue.gif');
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     
-    // Agents
-    const agents = ['smeargle', 'unown', 'rotom', 'snorlax', 'mewtwo', 'ditto'];
-    agents.forEach(a => {
-        const fileName = (a === 'unown') ? 'unown-aOn.gif' : a + 'On.gif';
-        this.load.image(a, path + fileName);
-    });
-
-    // Enemies
-    this.load.image('codingOn', path + 'codingOn.gif'); 
-    this.load.image('FLOPPYOn', path + 'FLOPPYOn.gif'); 
-    this.load.image('terminalOnTest', path + 'terminalOnTest.webp'); 
+    // Load Agents
+    AGENTS.forEach(a => this.load.image(a.key, PATH + a.file));
+    
+    // Load Enemies
+    Object.values(ENEMIES).forEach(e => this.load.image(e.key, PATH + e.file));
 }
 
-let beltBalls = {};
-let activeBattles = {};
+let belt = {};
+let activeTasks = {};
 
 function create() {
-    const scene = this;
+    this.add.grid(400, 300, 800, 600, 40, 40, 0x000000, 0, 0x00aaff, 0.1);
+    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(60, 80);
 
-    // Grid
-    const g = this.add.graphics();
-    g.lineStyle(1, 0x00aaff, 0.08);
-    for(let i=0; i<800; i+=40) g.lineBetween(i, 0, i, 600);
-    for(let i=0; i<600; i+=40) g.lineBetween(0, i, 800, i);
-
-    this.blue = this.add.image(400, 300, 'blue').setScale(1.2);
-
-    const agentList = ['Snorlax', 'Rotom', 'Unown', 'Smeargle', 'Mewtwo', 'Ditto'];
-    agentList.forEach((name, i) => {
-        const yPos = 80 + (i * 85);
-        const ball = this.add.image(50, yPos, 'ball').setScale(1.5);
-        const label = this.add.text(80, yPos, name.toUpperCase(), { fontSize: '10px', color: '#00aaff' }).setOrigin(0, 0.5);
-        beltBalls[name.toLowerCase()] = { ball, label, y: yPos, fullName: name, isBusy: false };
+    AGENTS.forEach((a, i) => {
+        const y = 80 + (i * 85);
+        const ball = this.add.image(50, y, 'ball').setDisplaySize(30, 30);
+        const txt = this.add.text(75, y, a.key.toUpperCase(), {fontSize:'10px', color:'#00aaff'}).setOrigin(0,0.5);
+        belt[a.key] = { ball, txt, y, isBusy: false };
     });
 
-    // Loop-safe deployment logic
-    this.time.addEvent({
-        delay: 3000,
-        callback: autoDeploy,
-        callbackScope: this,
-        loop: true
-    });
+    // Safe Deployment Loop
+    this.time.addEvent({ delay: 4000, callback: autoManager, callbackScope: this, loop: true });
 }
 
-function autoDeploy() {
-    // Find an agent that isn't busy
-    const available = Object.keys(beltBalls).find(key => !beltBalls[key].isBusy);
-    if (!available) return;
+function autoManager() {
+    const freeAgent = AGENTS.find(a => !belt[a.key].isBusy);
+    const freeNodeKey = Object.keys(ENEMIES).find(key => !activeTasks[key]);
 
-    // Find a node that isn't currently under attack
-    const busyNodes = Object.values(activeBattles).map(b => b.nodeKey);
-    const targetNode = Object.keys(NODES).find(key => !busyNodes.includes(key));
-    
-    if (targetNode) deploy(available, targetNode);
+    if (freeAgent && freeNodeKey) {
+        deployAgent(freeAgent.key, freeNodeKey);
+    }
 }
 
-function deploy(agentKey, nodeKey) {
-    const scene = game.scene.scenes[0];
-    const node = NODES[nodeKey];
-    const beltItem = beltBalls[agentKey];
+function deployAgent(aKey, nKey) {
+    const node = ENEMIES[nKey];
+    const bItem = belt[aKey];
+    bItem.isBusy = true;
+    activeTasks[nKey] = true;
     
-    beltItem.isBusy = true; // Block double-deployment
-    updateLog(beltItem.fullName, node.name, 'DEPLOY');
-    beltItem.ball.setVisible(false);
-    beltItem.label.setAlpha(0.2);
+    bItem.ball.setAlpha(0.2);
+    const flyBall = this.add.image(50, bItem.y, 'ball').setDisplaySize(30, 30);
 
-    const flyBall = scene.add.image(50, beltItem.y, 'ball').setScale(1.5);
-    scene.tweens.add({
-        targets: flyBall, x: node.x, y: node.y,
-        angle: 720, duration: 800,
+    this.tweens.add({
+        targets: flyBall,
+        x: node.x, y: node.y,
+        angle: 360, duration: 800,
         onComplete: () => {
             flyBall.destroy();
-            startBattle(agentKey, nodeKey);
+            startBattle.call(this, aKey, nKey);
         }
     });
 }
 
-function startBattle(agentKey, nodeKey) {
-    const scene = game.scene.scenes[0];
-    const node = NODES[nodeKey];
-    const fullName = beltBalls[agentKey].fullName;
-
-    const enemy = scene.add.image(node.x + 60, node.y, node.enemy).setScale(node.scale);
-    const hbBg = scene.add.rectangle(node.x + 60, node.y - 70, 60, 4, 0x112244);
-    const hbFill = scene.add.rectangle(node.x + 60, node.y - 70, 60, 4, 0x00ffaa);
-    const poke = scene.add.image(node.x - 60, node.y, agentKey).setScale(AGENT_SETTINGS.scale);
-
-    activeBattles[agentKey] = { poke, enemy, hbFill, hbBg, nodeKey, fullName };
-
-    scene.tweens.add({
-        targets: poke, x: '+=25', duration: 200, yoyo: true, repeat: -1,
+function startBattle(aKey, nKey) {
+    const node = ENEMIES[nKey];
+    
+    // Force exact pixel sizes to fix the "huge" scaling issue
+    const enemy = this.add.image(node.x + 40, node.y, node.key).setDisplaySize(node.size, node.size);
+    const agent = this.add.image(node.x - 40, node.y, aKey).setDisplaySize(50, 50);
+    
+    const hb = this.add.rectangle(node.x + 40, node.y - (node.size/2 + 10), 60, 4, 0x00ffaa);
+    
+    this.tweens.add({
+        targets: agent,
+        x: '+=20', duration: 200, yoyo: true, repeat: -1,
         onYoyo: () => {
-            if (hbFill.scaleX > 0) {
-                hbFill.scaleX -= 0.08;
-                enemy.setTint(0xff0000);
-                scene.time.delayedCall(50, () => enemy.clearTint());
-            } else {
-                finishBattle(agentKey);
+            hb.width -= 3;
+            enemy.setTint(0x00aaff);
+            this.time.delayedCall(50, () => enemy.clearTint());
+            if (hb.width <= 0) {
+                this.tweens.killTweensOf(agent);
+                enemy.destroy(); hb.destroy();
+                finishMission.call(this, aKey, nKey, agent);
             }
         }
     });
 }
 
-function finishBattle(agentKey) {
-    const scene = game.scene.scenes[0];
-    const b = activeBattles[agentKey];
-    if(!b) return;
-
-    updateLog(b.fullName, NODES[b.nodeKey].name, 'SUCCESS');
-    b.enemy.destroy(); b.hbFill.destroy(); b.hbBg.destroy();
-
-    scene.tweens.add({
-        targets: b.poke, x: 50, y: beltBalls[agentKey].y,
-        scale: 0.1, alpha: 0, duration: 600,
+function finishMission(aKey, nKey, sprite) {
+    this.tweens.add({
+        targets: sprite,
+        x: 50, y: belt[aKey].y,
+        alpha: 0, scale: 0, duration: 800,
         onComplete: () => {
-            b.poke.destroy();
-            beltBalls[agentKey].ball.setVisible(true);
-            beltBalls[agentKey].label.setAlpha(1);
-            beltBalls[agentKey].isBusy = false; // Release for next task
-            delete activeBattles[agentKey];
+            sprite.destroy();
+            belt[aKey].isBusy = false;
+            belt[aKey].ball.setAlpha(1);
+            delete activeTasks[nKey];
         }
     });
 }
 
 function update() {
     this.blue.y = 300 + Math.sin(this.time.now / 1000) * 5;
-    document.getElementById('status-text').innerText = "ACTIVE_AGENTS: " + Object.keys(activeBattles).length;
 }
 </script>
 </body>
