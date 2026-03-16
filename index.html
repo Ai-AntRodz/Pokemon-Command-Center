@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>OpenClaw Command Center - v7</title>
+    <title>OpenClaw Command Center - v9</title>
     <style>
         body { margin: 0; background: #01050a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { image-rendering: pixelated; border: 4px solid #112244; }
@@ -10,6 +10,7 @@
             position: absolute; bottom: 20px; right: 20px; width: 280px; height: 120px; 
             background: rgba(0, 8, 20, 0.95); border: 1px solid #00aaff; color: #00aaff; 
             font-family: monospace; font-size: 10px; padding: 8px; overflow: hidden;
+            pointer-events: none;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
@@ -29,47 +30,50 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-const PATH = 'gifs-Sprites/';
-
-// --- HARD SCALE DICTIONARY ---
-// Tweak 'w' and 'h' here to fix the Floppy or any other giant GIFs
+// --- UPDATED HARD SCALING ---
 const ASSET_SCALES = {
-    // Agents
-    'snorlax': { w: 50, h: 50 },
-    'rotom':   { w: 45, h: 45 },
-    'unown':   { w: 40, h: 40 },
-    'smeargle':{ w: 50, h: 50 },
-    'mewtwo':  { w: 55, h: 65 },
-    'ditto':   { w: 45, h: 40 },
-    // Enemies
-    'codingOn':       { w: 60, h: 60 },
-    'FLOPPYOn':       { w: 40, h: 40 }, // Shrink Floppy significantly
-    'terminalOnTest': { w: 80, h: 80 },
-    // UI
-    'blue': { w: 60, h: 80 },
-    'ball': { w: 30, h: 30 }
+    'snorlax': { w: 60, h: 60 },
+    'rotom':   { w: 50, h: 50 },
+    'unown':   { w: 45, h: 45 },
+    'smeargle':{ w: 55, h: 55 },
+    'mewtwo':  { w: 60, h: 75 },
+    'ditto':   { w: 50, h: 45 },
+    'coding':  { w: 65, h: 65 }, // Adjusted Laptop
+    'floppy':  { w: 40, h: 40 }, // Forced small Floppy
+    'terminal':{ w: 40, h: 40 },
+    'blue':    { w: 85, h: 85 },
+    'ball':    { w: 25, h: 25 }
 };
 
 const AGENTS = [
-    { key: 'snorlax', file: 'snorlaxOn.gif' },
-    { key: 'rotom', file: 'rotomOn.gif' },
-    { key: 'unown', file: 'unown-aOn.gif' },
-    { key: 'smeargle', file: 'smeargleOn.gif' },
-    { key: 'mewtwo', file: 'mewtwoOn.gif' },
-    { key: 'ditto', file: 'dittoOn.gif' }
+    { key: 'snorlax', file: 'snorlax.gif' },
+    { key: 'rotom', file: 'rotom.gif' },
+    { key: 'unown', file: 'unown.gif' },
+    { key: 'smeargle', file: 'smeargle.gif' },
+    { key: 'mewtwo', file: 'mewtwo.gif' },
+    { key: 'ditto', file: 'ditto.gif' }
 ];
 
 const ENEMIES = {
-    LAPTOP: { key: 'codingOn', file: 'codingOn.gif', x: 250, y: 150 },
-    FLOPPY: { key: 'FLOPPYOn', file: 'FLOPPYOn.gif', x: 550, y: 150 },
-    TERM:   { key: 'terminalOnTest', file: 'terminalOnTest.webp', x: 400, y: 480 }
+    LAPTOP: { key: 'coding', file: 'coding.gif', x: 250, y: 160 },
+    FLOPPY: { key: 'floppy', file: 'floppy.gif', x: 550, y: 160 },
+    TERM:   { key: 'terminal', file: 'terminal.webp', x: 400, y: 460 }
 };
 
 function preload() {
-    this.load.image('blue', PATH + 'trainerblue.gif');
+    const path = 'gifs-Sprites/';
+
+    this.load.on('loaderror', (file) => console.warn('Missing File:', file.src));
+
+    // Load static assets
+    this.load.image('blue', path + 'trainerblue.gif');
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
-    AGENTS.forEach(a => this.load.image(a.key, PATH + a.file));
-    Object.values(ENEMIES).forEach(e => this.load.image(e.key, PATH + e.file));
+    
+    // Load Agents using new naming convention
+    AGENTS.forEach(a => this.load.image(a.key, path + a.file));
+    
+    // Load Enemies using new naming convention
+    Object.values(ENEMIES).forEach(e => this.load.image(e.key, path + e.file));
 }
 
 let belt = {};
@@ -78,33 +82,27 @@ let activeTasks = {};
 function create() {
     this.add.grid(400, 300, 800, 600, 40, 40, 0x000000, 0, 0x00aaff, 0.1);
     
-    // Scale Blue using the dictionary
-    const bScale = ASSET_SCALES['blue'];
-    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(bScale.w, bScale.h);
+    const bS = ASSET_SCALES['blue'];
+    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(bS.w, bS.h);
 
     AGENTS.forEach((a, i) => {
         const y = 80 + (i * 85);
-        const ball = this.add.image(50, y, 'ball').setDisplaySize(30, 30);
-        const txt = this.add.text(75, y, a.key.toUpperCase(), {fontSize:'10px', color:'#00aaff'}).setOrigin(0,0.5);
+        const ball = this.add.image(50, y, 'ball').setDisplaySize(25, 25);
+        const txt = this.add.text(80, y, a.key.toUpperCase(), {fontSize:'11px', color:'#00aaff', fontStyle:'bold'}).setOrigin(0,0.5);
         belt[a.key] = { ball, txt, y, isBusy: false };
     });
 
-    // Deploy every 4 seconds
-    this.time.addEvent({ delay: 4000, callback: autoManager, callbackScope: this, loop: true });
+    this.time.addEvent({ delay: 3500, callback: autoManager, callbackScope: this, loop: true });
 }
 
 function autoManager() {
-    // 1. Get all available (not busy) agents
-    const availableAgents = AGENTS.filter(a => !belt[a.key].isBusy);
-    
-    // 2. Get all empty nodes
+    const available = AGENTS.filter(a => !belt[a.key].isBusy);
     const freeNodes = Object.keys(ENEMIES).filter(key => !activeTasks[key]);
 
-    if (availableAgents.length > 0 && freeNodes.length > 0) {
-        // Pick a random agent to ensure Mewtwo/Ditto get picked
-        const randomAgent = availableAgents[Math.floor(Math.random() * availableAgents.length)];
-        const randomNode = freeNodes[Math.floor(Math.random() * freeNodes.length)];
-        deployAgent.call(this, randomAgent.key, randomNode);
+    if (available.length > 0 && freeNodes.length > 0) {
+        const agent = Phaser.Utils.Array.GetRandom(available);
+        const nodeKey = Phaser.Utils.Array.GetRandom(freeNodes);
+        deployAgent.call(this, agent.key, nodeKey);
     }
 }
 
@@ -115,12 +113,11 @@ function deployAgent(aKey, nKey) {
     activeTasks[nKey] = true;
     
     bItem.ball.setAlpha(0.2);
-    const flyBall = this.add.image(50, bItem.y, 'ball').setDisplaySize(30, 30);
+    const flyBall = this.add.image(50, bItem.y, 'ball').setDisplaySize(25, 25);
 
     this.tweens.add({
-        targets: flyBall,
-        x: node.x, y: node.y,
-        angle: 360, duration: 800,
+        targets: flyBall, x: node.x, y: node.y,
+        angle: 360, duration: 700,
         onComplete: () => {
             flyBall.destroy();
             startBattle.call(this, aKey, nKey);
@@ -130,26 +127,26 @@ function deployAgent(aKey, nKey) {
 
 function startBattle(aKey, nKey) {
     const nodeData = ENEMIES[nKey];
-    const eScale = ASSET_SCALES[nodeData.key];
-    const pScale = ASSET_SCALES[aKey];
+    const eS = ASSET_SCALES[nodeData.key];
+    const pS = ASSET_SCALES[aKey];
     
-    // Generate fresh Health Bar (Resetting it to 60px wide)
-    const enemy = this.add.image(nodeData.x + 40, nodeData.y, nodeData.key).setDisplaySize(eScale.w, eScale.h);
-    const agent = this.add.image(nodeData.x - 40, nodeData.y, aKey).setDisplaySize(pScale.w, pScale.h);
-    const hb = this.add.rectangle(nodeData.x + 40, nodeData.y - (eScale.h/2 + 10), 60, 4, 0x00ffaa);
+    const enemy = this.add.image(nodeData.x + 50, nodeData.y, nodeData.key).setDisplaySize(eS.w, eS.h);
+    const agent = this.add.image(nodeData.x - 50, nodeData.y, aKey).setDisplaySize(pS.w, pS.h);
+    
+    // UI: Health Bar Background and Fill (Reset every time)
+    const hbBg = this.add.rectangle(nodeData.x + 50, nodeData.y - (eS.h/2 + 15), 60, 5, 0x112244);
+    const hb = this.add.rectangle(nodeData.x + 50, nodeData.y - (eS.h/2 + 15), 60, 5, 0x00ffaa);
     
     this.tweens.add({
-        targets: agent,
-        x: '+=20', duration: 200, yoyo: true, repeat: -1,
+        targets: agent, x: '+=25', duration: 180, yoyo: true, repeat: -1,
         onYoyo: () => {
-            hb.width -= 4; // Damage per hit
+            hb.width -= 6; // Damage
             enemy.setTint(0x00aaff);
             this.time.delayedCall(50, () => enemy.clearTint());
             
             if (hb.width <= 0) {
                 this.tweens.killTweensOf(agent);
-                enemy.destroy(); 
-                hb.destroy();
+                enemy.destroy(); hb.destroy(); hbBg.destroy();
                 finishMission.call(this, aKey, nKey, agent);
             }
         }
@@ -158,14 +155,13 @@ function startBattle(aKey, nKey) {
 
 function finishMission(aKey, nKey, sprite) {
     this.tweens.add({
-        targets: sprite,
-        x: 50, y: belt[aKey].y,
-        alpha: 0, scale: 0, duration: 800,
+        targets: sprite, x: 50, y: belt[aKey].y,
+        alpha: 0, scale: 0, duration: 600,
         onComplete: () => {
             sprite.destroy();
             belt[aKey].isBusy = false;
             belt[aKey].ball.setAlpha(1);
-            delete activeTasks[nKey]; // Node is now free for a new, fresh health bar
+            delete activeTasks[nKey]; 
         }
     });
 }
