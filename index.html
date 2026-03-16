@@ -5,23 +5,24 @@
     <title>OpenClaw Tactical Command</title>
     <style>
         :root { --neon-blue: #00d2ff; --dark-bg: #000a14; --panel-bg: rgba(0, 20, 40, 0.9); }
-        body { margin: 0; background: var(--dark-bg); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', 'Courier New', monospace; }
+        body { margin: 0; background: var(--dark-bg); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Courier New', monospace; }
         
-        /* Scanline Effect Overlay */
+        /* Cyber CRT Overlay */
         body::before {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
             z-index: 10; background-size: 100% 2px, 3px 100%; pointer-events: none;
         }
 
-        canvas { border: 2px solid var(--neon-blue); box-shadow: 0 0 25px rgba(0, 210, 255, 0.2); border-radius: 4px; }
+        canvas { border: 2px solid var(--neon-blue); box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); }
 
         #ui-layer { position: absolute; width: 800px; height: 600px; pointer-events: none; }
         
         #terminal {
             position: absolute; bottom: 20px; right: 20px; width: 260px; height: 130px;
             background: var(--panel-bg); border: 1px solid var(--neon-blue);
-            color: var(--neon-blue); padding: 10px; font-size: 11px; clip-path: polygon(0 0, 100% 0, 100% 85%, 90% 100%, 0 100%);
+            color: var(--neon-blue); padding: 10px; font-size: 11px;
+            clip-path: polygon(0 0, 100% 0, 100% 85%, 90% 100%, 0 100%);
         }
 
         .log-entry { margin-bottom: 4px; border-left: 2px solid var(--neon-blue); padding-left: 8px; animation: blink 0.1s ease-in; }
@@ -29,7 +30,7 @@
 
         #header {
             position: absolute; top: 20px; left: 20px; color: var(--neon-blue);
-            text-transform: uppercase; letter-spacing: 3px; border-left: 4px solid var(--neon-blue); padding-left: 15px;
+            text-transform: uppercase; letter-spacing: 2px; border-left: 4px solid var(--neon-blue); padding-left: 15px;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
@@ -38,12 +39,11 @@
 
 <div id="ui-layer">
     <div id="header">
-        <div style="font-size: 22px; font-weight: 900;">OpenClaw <span style="color: #fff;">Unit-02</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">Sector: Blue Protocol | Signal: Stable</div>
+        <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
+        <div style="font-size: 10px; opacity: 0.8;">LINK_STATUS: STABLE</div>
     </div>
-
     <div id="terminal">
-        <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">COMBAT_DATA_FEED</div>
+        <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
         <div id="log-content"></div>
     </div>
 </div>
@@ -53,7 +53,7 @@ const logContent = document.getElementById('log-content');
 function addLog(msg) {
     const entry = document.createElement('div');
     entry.className = 'log-entry';
-    entry.innerText = `[${new Date().toLocaleTimeString([], {hour12:false})}] ${msg}`;
+    entry.innerText = `> ${msg}`;
     logContent.prepend(entry);
     if(logContent.children.length > 5) logContent.lastChild.remove();
 }
@@ -63,137 +63,56 @@ const config = {
     width: 800,
     height: 600,
     pixelArt: true,
-    transparent: true,
     scene: { preload: preload, create: create, update: update }
 };
 
 const game = new Phaser.Game(config);
 
+// --- HARD SCALING VALUES ---
 const SCALES = {
-    'blue': {w:110, h:140},
-    'snorlax': {w:65, h:65}, 'rotom': {w:55, h:55}, 'unown': {w:45, h:45},
-    'smeargle': {w:60, h:60}, 'mewtwo': {w:75, h:95}, 'ditto': {w:55, h:50},
-    'coding': {w:70, h:70}, 'floppy': {w:45, h:45}, 'terminal': {w:90, h:90}, 'www': {w:85, h:65}
+    'blue': {w:110, h:140}, // Buffed Size
+    'snorlax': {w:60, h:60}, 'rotom': {w:50, h:50}, 'unown': {w:45, h:45},
+    'smeargle': {w:55, h:55}, 'mewtwo': {w:70, h:90}, 'ditto': {w:55, h:50},
+    'coding': {w:70, h:70}, 
+    'floppy': {w:40, h:40}, 
+    'terminal': {w:85, h:85}, 
+    'www': {w:80, h:60}
 };
 
-const AGENTS = ['snorlax', 'rotom', 'unown', 'smeargle', 'mewtwo', 'ditto'];
-const TASKS = {
-    A: { key: 'coding', x: 220, y: 160 },
-    B: { key: 'floppy', x: 580, y: 160 },
-    C: { key: 'www',    x: 220, y: 440 },
-    D: { key: 'terminal', x: 580, y: 440 }
+// --- UPDATED FILENAMES (SIMPLE LOWERCASE) ---
+const AGENT_KEYS = ['snorlax', 'rotom', 'unown', 'smeargle', 'mewtwo', 'ditto'];
+
+const TASK_NODES = {
+    A: { key: 'coding', file: 'coding.gif', x: 220, y: 160 },
+    B: { key: 'floppy', file: 'floppy.gif', x: 580, y: 160 },
+    C: { key: 'www',    file: 'www.gif',    x: 220, y: 440 },
+    D: { key: 'terminal', file: 'terminal.webp', x: 580, y: 440 }
 };
 
 function preload() {
     const path = 'gifs-Sprites/';
     const v = "?v=" + Date.now();
     
+    // Load Core
     this.load.image('blue', path + 'trainerblue.gif' + v);
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     
-    AGENTS.forEach(a => this.load.image(a, path + a + '.gif' + v));
-    this.load.image('coding', path + 'coding.gif' + v);
-    this.load.image('floppy', path + 'floppy.gif' + v);
-    this.load.image('terminal', path + 'terminal.webp' + v);
-    this.load.image('www', path + 'www.gif' + v);
+    // Load Agents
+    AGENT_KEYS.forEach(k => this.load.image(k, path + k + '.gif' + v));
+    
+    // Load Enemies
+    Object.values(TASK_NODES).forEach(n => this.load.image(n.key, path + n.file + v));
+
+    // Recovery logic: Stop the engine from hanging on 404s
+    this.load.on('loaderror', (file) => {
+        addLog(`ERR: ${file.key} NOT FOUND`);
+        console.error("Load Error:", file.src);
+    });
 }
 
 let belt = {};
 let activeNodes = {};
 
 function create() {
-    addLog("OS_LOADED...");
-    
-    // Cyber Grid
-    this.add.grid(400, 300, 800, 600, 40, 40, 0x000000, 0, 0x00d2ff, 0.05);
-
-    // Central Blue Unit
-    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(SCALES.blue.w, SCALES.blue.h);
-
-    // Sidebar Deployment Belt
-    AGENTS.forEach((a, i) => {
-        const y = 85 + (i * 85);
-        const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
-        const name = this.add.text(80, y, a.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
-        belt[a] = { ball, name, y, busy: false };
-    });
-
-    this.time.addEvent({ delay: 3500, callback: dispatcher, callbackScope: this, loop: true });
-}
-
-function dispatcher() {
-    const freeAgent = AGENTS.find(a => !belt[a].busy);
-    const freeNodeKey = Object.keys(TASKS).find(k => !activeNodes[k]);
-
-    if (freeAgent && freeNodeKey) {
-        execute(freeAgent, freeNodeKey);
-    }
-}
-
-function execute(aKey, nKey) {
-    const node = TASKS[nKey];
-    belt[aKey].busy = true;
-    activeNodes[nKey] = true;
-    belt[aKey].ball.setAlpha(0.2);
-
-    addLog(`DEPLOYING ${aKey.toUpperCase()}`);
-
-    const ball = this.add.image(50, belt[aKey].y, 'ball').setDisplaySize(28, 28);
-    this.tweens.add({
-        targets: ball, x: node.x, y: node.y, angle: 360, duration: 700, ease: 'Cubic.out',
-        onComplete: () => {
-            ball.destroy();
-            combat.call(this, aKey, nKey);
-        }
-    });
-}
-
-function combat(aKey, nKey) {
-    const node = TASKS[nKey];
-    const eS = SCALES[node.key];
-    const pS = SCALES[aKey];
-
-    const enemy = this.add.image(node.x + 50, node.y, node.key).setDisplaySize(eS.w, eS.h);
-    const agent = this.add.image(node.x - 50, node.y, aKey).setDisplaySize(pS.w, pS.h);
-    
-    // Health Bar HUD
-    const barW = 60;
-    const bg = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), barW, 4, 0x002244);
-    const hp = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), barW, 4, 0x00d2ff);
-
-    this.tweens.add({
-        targets: agent, x: '+=20', duration: 180, yoyo: true, repeat: -1,
-        onYoyo: () => {
-            hp.width -= 10;
-            enemy.setTint(0x00d2ff);
-            this.time.delayedCall(50, () => enemy.clearTint());
-            
-            if (hp.width <= 0) {
-                addLog(`TARGET_CLEARED`);
-                this.tweens.killTweensOf(agent);
-                enemy.destroy(); hp.destroy(); bg.destroy();
-                recall.call(this, aKey, nKey, agent);
-            }
-        }
-    });
-}
-
-function recall(aKey, nKey, sprite) {
-    this.tweens.add({
-        targets: sprite, x: 50, y: belt[aKey].y, alpha: 0, scale: 0, duration: 600,
-        onComplete: () => {
-            sprite.destroy();
-            belt[aKey].busy = false;
-            belt[aKey].ball.setAlpha(1);
-            delete activeNodes[nKey];
-        }
-    });
-}
-
-function update() {
-    this.blue.y = 300 + Math.sin(this.time.now / 1000) * 10;
-    this.blue.alpha = 0.8 + Math.abs(Math.sin(this.time.now / 2000)) * 0.2;
-}
-</script>
-</body>
-</html>
+    addLog("OS_V9_ONLINE");
+    this.add.grid(400, 300, 800, 600,
