@@ -68,21 +68,19 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// --- HARD SCALING VALUES ---
+// --- UPDATED FILENAMES & HARD SCALES ---
 const SCALES = {
-    'blue': {w:110, h:140}, // Buffed Size
+    'blue': {w:115, h:145}, 
     'snorlax': {w:60, h:60}, 'rotom': {w:50, h:50}, 'unown': {w:45, h:45},
     'smeargle': {w:55, h:55}, 'mewtwo': {w:70, h:90}, 'ditto': {w:55, h:50},
     'coding': {w:70, h:70}, 
-    'floppy': {w:40, h:40}, 
+    'floppy': {w:35, h:35}, // Tiny Floppy
     'terminal': {w:85, h:85}, 
     'www': {w:80, h:60}
 };
 
-// --- UPDATED FILENAMES (SIMPLE LOWERCASE) ---
-const AGENT_KEYS = ['snorlax', 'rotom', 'unown', 'smeargle', 'mewtwo', 'ditto'];
-
-const TASK_NODES = {
+const AGENTS = ['snorlax', 'rotom', 'unown', 'smeargle', 'mewtwo', 'ditto'];
+const ENEMY_NODES = {
     A: { key: 'coding', file: 'coding.gif', x: 220, y: 160 },
     B: { key: 'floppy', file: 'floppy.gif', x: 580, y: 160 },
     C: { key: 'www',    file: 'www.gif',    x: 220, y: 440 },
@@ -93,26 +91,121 @@ function preload() {
     const path = 'gifs-Sprites/';
     const v = "?v=" + Date.now();
     
-    // Load Core
+    // Fail-safe: Force start if loading takes more than 5 seconds
+    this.time.delayedCall(5000, () => {
+        if (!this.scene.isActive()) {
+            console.warn("Loader timeout - forcing start.");
+            this.scene.start();
+        }
+    });
+
     this.load.image('blue', path + 'trainerblue.gif' + v);
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     
-    // Load Agents
-    AGENT_KEYS.forEach(k => this.load.image(k, path + k + '.gif' + v));
-    
-    // Load Enemies
-    Object.values(TASK_NODES).forEach(n => this.load.image(n.key, path + n.file + v));
+    AGENTS.forEach(k => this.load.image(k, path + k + '.gif' + v));
+    Object.values(ENEMY_NODES).forEach(n => this.load.image(n.key, path + n.file + v));
 
-    // Recovery logic: Stop the engine from hanging on 404s
     this.load.on('loaderror', (file) => {
-        addLog(`ERR: ${file.key} NOT FOUND`);
-        console.error("Load Error:", file.src);
+        addLog(`LOAD_FAIL: ${file.key}`);
     });
 }
 
 let belt = {};
-let activeNodes = {};
+let activeTasks = {};
 
 function create() {
-    addLog("OS_V9_ONLINE");
-    this.add.grid(400, 300, 800, 600,
+    addLog("SYSTEM_BOOT_SUCCESS");
+    this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
+
+    // Leader Blue
+    const bS = SCALES.blue;
+    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(bS.w, bS.h);
+
+    // Sidebar
+    AGENTS.forEach((key, i) => {
+        const y = 85 + (i * 85);
+        const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
+        const nameText = this.add.text(80, y, key.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
+        belt[key] = { ball, nameText, y, busy: false };
+    });
+
+    this.time.addEvent({ delay: 3500, callback: autoDispatch, callbackScope: this, loop: true });
+}
+
+function autoDispatch() {
+    const freeAgent = AGENTS.find(a => !belt[a].busy);
+    const freeNodeKey = Object.keys(ENEMY_NODES).find(k => !activeTasks[k]);
+
+    if (freeAgent && freeNodeKey) {
+        launchMission.call(this, freeAgent, freeNodeKey);
+    }
+}
+
+function launchMission(aKey, nKey) {
+    const node = ENEMY_NODES[nKey];
+    belt[aKey].busy = true;
+    activeTasks[nKey] = true;
+    belt[aKey].ball.setAlpha(0.2);
+
+    addLog(`MISSION_START: ${aKey.toUpperCase()}`);
+
+    const ball = this.add.image(50, belt[aKey].y, 'ball').setDisplaySize(28, 28);
+    this.tweens.add({
+        targets: ball, x: node.x, y: node.y, angle: 360, duration: 800,
+        onComplete: () => {
+            ball.destroy();
+            beginBattle.call(this, aKey, nKey);
+        }
+    });
+}
+
+function beginBattle(aKey, nKey) {
+    const node = ENEMY_NODES[nKey];
+    const eS = SCALES[node.key] || {w:50, h:50};
+    const pS = SCALES[aKey] || {w:50, h:50};
+
+    // Check if texture actually loaded, else use ball placeholder
+    const enemyImg = this.textures.exists(node.key) ? node.key : 'ball';
+    const pokeImg = this.textures.exists(aKey) ? aKey : 'ball';
+
+    const enemy = this.add.image(node.x + 50, node.y, enemyImg).setDisplaySize(eS.w, eS.h);
+    const poke = this.add.image(node.x - 50, node.y, pokeImg).setDisplaySize(pS.w, pS.h);
+    
+    const bg = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), 60, 4, 0x002244);
+    const hp = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), 60, 4, 0x00d2ff);
+
+    this.tweens.add({
+        targets: poke, x: '+=20', duration: 200, yoyo: true, repeat: -1,
+        onYoyo: () => {
+            hp.width -= 12;
+            enemy.setTint(0x00d2ff);
+            this.time.delayedCall(50, () => enemy.clearTint());
+            
+            if (hp.width <= 0) {
+                addLog(`TARGET_DOWN: ${node.key.toUpperCase()}`);
+                this.tweens.killTweensOf(poke);
+                enemy.destroy(); hp.destroy(); bg.destroy();
+                retreat.call(this, aKey, nKey, poke);
+            }
+        }
+    });
+}
+
+function retreat(aKey, nKey, sprite) {
+    this.tweens.add({
+        targets: sprite, x: 50, y: belt[aKey].y, alpha: 0, scale: 0, duration: 600,
+        onComplete: () => {
+            sprite.destroy();
+            belt[aKey].busy = false;
+            belt[aKey].ball.setAlpha(1);
+            delete activeTasks[nKey];
+        }
+    });
+}
+
+function update() {
+    this.blue.y = 300 + Math.sin(this.time.now / 1000) * 10;
+}
+</script>
+</body>
+</html>
