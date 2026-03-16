@@ -10,7 +10,7 @@
         body::before {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            z-index: 10; background-size: 100% 2px, 3px 100%; pointer-events: none;
+            z-index: 100; background-size: 100% 2px, 3px 100%; pointer-events: none;
         }
 
         canvas { border: 2px solid var(--neon-blue); box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); }
@@ -21,10 +21,8 @@
             background: var(--panel-bg); border: 1px solid var(--neon-blue);
             color: var(--neon-blue); padding: 10px; font-size: 11px;
             clip-path: polygon(0 0, 100% 0, 100% 85%, 90% 100%, 0 100%);
+            z-index: 101;
         }
-
-        .log-entry { margin-bottom: 4px; border-left: 2px solid var(--neon-blue); padding-left: 8px; animation: blink 0.1s ease-in; }
-        @keyframes blink { from { opacity: 0; } to { opacity: 1; } }
 
         #header {
             position: absolute; top: 20px; left: 20px; color: var(--neon-blue);
@@ -38,7 +36,7 @@
 <div id="ui-layer">
     <div id="header">
         <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">LINK_ESTABLISHED: DATA_SYNC</div>
+        <div style="font-size: 10px; opacity: 0.8;">OPERATOR: GILGAMESH</div>
     </div>
     <div id="terminal">
         <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
@@ -70,11 +68,11 @@ const POKEMON_LIST = [
 ];
 
 const ENEMY_LIST = [
-    { id: 'coding',  file: 'coding.gif',    w: 70, h: 70, x: 220, y: 160 },
-    { id: 'floppy',  file: 'floppy.gif',    w: 35, h: 35, x: 580, y: 160 },
-    { id: 'www',     file: 'www.gif',       w: 80, h: 60, x: 220, y: 440 },
-    { id: 'terminal',file: 'terminal.webp', w: 85, h: 85, x: 580, y: 440 },
-    { id: 'dummy',   file: 'ball',          w: 40, h: 40, x: 400, y: 450 } 
+    { id: 'coding',  file: 'coding.gif',    w: 70, h: 70, x: 250, y: 150 },
+    { id: 'floppy',  file: 'floppy.gif',    w: 35, h: 35, x: 550, y: 150 },
+    { id: 'www',     file: 'www.gif',       w: 80, h: 60, x: 250, y: 380 },
+    { id: 'terminal',file: 'terminal.webp', w: 85, h: 85, x: 550, y: 380 },
+    { id: 'dummy',   file: 'ball',          w: 40, h: 40, x: 400, y: 180 } 
 ];
 
 const config = {
@@ -100,38 +98,49 @@ function preload() {
 let belt = {};
 let activeNodes = {};
 let nextLaunchTime = 0;
-let links = []; // Store visual links
+let links = []; 
+let grid, gilgameshText;
 
 function create() {
-    addLog("OS_V16_UPGRADED");
-    this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
-    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
+    addLog("OS_V18_AUTHORIZED");
+    grid = this.add.grid(400, 300, 1200, 1200, 40, 40, 0x000, 0, 0x00d2ff, 0.1);
+    
+    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145).setDepth(10);
+    
+    // Gilgamesh Nameplate
+    gilgameshText = this.add.text(400, 385, "GILGAMESH", { 
+        fontSize: '14px', 
+        color: '#fff', 
+        backgroundColor: '#00d2ff',
+        padding: { x: 8, y: 4 },
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(15);
 
     POKEMON_LIST.forEach((p, i) => {
         const y = 85 + (i * 85);
-        const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
-        const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
+        const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28).setDepth(10);
+        const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5).setDepth(10);
         belt[p.id] = { ball, nameText, y, busy: false };
     });
 }
 
-function createPulse(scene, x, y) {
-    for (let i = 0; i < 3; i++) {
-        const ring = scene.add.circle(x, y, 10, 0x00d2ff, 0).setStrokeStyle(2, 0x00d2ff);
-        scene.tweens.add({
-            targets: ring, radius: 40, alpha: { from: 0.8, to: 0 }, delay: i * 200, duration: 800,
-            onComplete: () => ring.destroy()
-        });
+function update(time, delta) {
+    if(grid) {
+        grid.y += 0.5; grid.x += 0.2;
+        if (grid.y > 350) grid.y = 250;
+        if (grid.x > 450) grid.x = 350;
     }
-}
 
-function update(time) {
-    if(this.blue) this.blue.y = 300 + Math.sin(time / 1000) * 10;
+    if(this.blue) {
+        const offset = Math.sin(time / 1000) * 10;
+        this.blue.y = 300 + offset;
+        if(gilgameshText) gilgameshText.y = 385 + offset; // Name moves with him
+    }
 
-    // Drawing Active Data Links
     links.forEach(l => {
         l.graphics.clear();
-        l.graphics.lineStyle(1, 0x00d2ff, Math.random() * 0.5 + 0.1);
+        l.graphics.setDepth(1); 
+        l.graphics.lineStyle(1, 0x00d2ff, Math.random() * 0.4 + 0.1);
         l.graphics.lineBetween(this.blue.x, this.blue.y - 20, l.target.x, l.target.y);
     });
 
@@ -142,8 +151,7 @@ function update(time) {
                 agent.ball.angle = Math.sin(time / 80) * 15;
                 agent.ball.alpha = 1.0; 
             } else {
-                agent.ball.angle = 0;
-                agent.ball.alpha = 0.2; 
+                agent.ball.angle = 0; agent.ball.alpha = 0.2; 
             }
         }
     });
@@ -154,8 +162,7 @@ function update(time) {
             const targetNode = ENEMY_LIST.find(e => e.id === targetId);
             if (!belt[p.id].busy && !activeNodes[targetId]) {
                 nextLaunchTime = time + 3500;
-                createPulse(this, 50, belt[p.id].y); 
-                this.time.delayedCall(800, () => launchMission.call(this, p.id, targetNode));
+                launchMission.call(this, p.id, targetNode);
                 break; 
             }
         }
@@ -165,9 +172,9 @@ function update(time) {
 function launchMission(aId, node) {
     belt[aId].busy = true;
     activeNodes[node.id] = true;
-    addLog(`SYNC_START: ${aId.toUpperCase()}`);
+    addLog(`DEPLOYING: ${aId.toUpperCase()}`);
 
-    const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
+    const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28).setDepth(11);
     this.tweens.add({
         targets: ball, x: node.x, y: node.y, angle: 360, duration: 1200, ease: 'Cubic.easeOut',
         onComplete: () => {
@@ -182,10 +189,8 @@ function beginBattle(aId, node) {
     const enemyImg = (node.id === 'dummy' || !this.textures.exists(node.id)) ? 'ball' : node.id;
     const pokeImg = this.textures.exists(aId) ? aId : 'ball';
 
-    const enemy = this.add.image(node.x + 50, node.y, enemyImg);
-    const poke = this.add.image(node.x - 50, node.y, pokeImg);
-    
-    // Add Link
+    const enemy = this.add.image(node.x + 50, node.y, enemyImg).setDepth(20);
+    const poke = this.add.image(node.x - 50, node.y, pokeImg).setDepth(20);
     const linkObj = { graphics: this.add.graphics(), target: poke };
     links.push(linkObj);
 
@@ -193,16 +198,14 @@ function beginBattle(aId, node) {
     if (pConf.w && pConf.h) poke.setDisplaySize(pConf.w, pConf.h);
     
     const hY = (node.h || 50);
-    const bg = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x002244);
-    const hp = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x00d2ff);
+    const bg = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x002244).setDepth(21);
+    const hp = this.add.rectangle(node.x + 50, node.y - (hY/2 + 12), 60, 4, 0x00d2ff).setDepth(22);
 
     const combatTween = this.tweens.add({
         targets: poke, x: '+=30', duration: 400, yoyo: true, repeat: -1,
         onYoyo: () => {
             if (hp && hp.active && hp.width > 0) {
                 hp.width -= 10;
-                const spark = this.add.star(node.x + 40, node.y, 5, 2, 8, 0x00d2ff);
-                this.tweens.add({ targets: spark, scale: 2, alpha: 0, duration: 250, onComplete: () => spark.destroy() });
                 if (enemy && enemy.active) {
                     enemy.setTint(0x00d2ff);
                     this.time.delayedCall(100, () => { if(enemy && enemy.active) enemy.clearTint(); });
@@ -210,8 +213,7 @@ function beginBattle(aId, node) {
             }
             if (hp && hp.width <= 0) {
                 combatTween.stop();
-                addLog(`TASK_COMPLETE: ${node.id.toUpperCase()}`);
-                this.cameras.main.shake(150, 0.005); 
+                addLog(`TARGET_SECURED: ${node.id.toUpperCase()}`);
                 links = links.filter(l => l !== linkObj); linkObj.graphics.destroy();
                 if(enemy) enemy.destroy(); if(hp) hp.destroy(); if(bg) bg.destroy();
                 retreat.call(this, aId, node.id, poke);
@@ -227,10 +229,8 @@ function retreat(aId, nodeId, sprite) {
     this.tweens.add({
         targets: sprite, x: 50, y: belt[aId].y, alpha: 0, scale: 0, duration: 900,
         onComplete: () => {
-            // EXP FLOAT EFFECT
-            const exp = this.add.text(80, belt[aId].y, "+120 EXP", { fontSize: '10px', color: '#fff', fontStyle: 'bold' });
+            const exp = this.add.text(80, belt[aId].y, "+120 EXP", { fontSize: '10px', color: '#fff', fontStyle: 'bold' }).setDepth(30);
             this.tweens.add({ targets: exp, y: '-=30', alpha: 0, duration: 1500, onComplete: () => exp.destroy() });
-            
             sprite.destroy();
             belt[aId].busy = false;
             delete activeNodes[nodeId];
