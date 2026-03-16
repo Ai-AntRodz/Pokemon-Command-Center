@@ -38,7 +38,7 @@
 <div id="ui-layer">
     <div id="header">
         <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">DISPATCH_MODE: RANDOM_SYNC</div>
+        <div style="font-size: 10px; opacity: 0.8;">STRATEGY_MODE: ASSIGNED_TARGETS</div>
     </div>
     <div id="terminal">
         <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
@@ -56,7 +56,17 @@ function addLog(msg) {
     if(logContent.children.length > 5) logContent.lastChild.remove();
 }
 
-// --- MASTER ASSET LISTS ---
+// --- TARGETING LOGIC ---
+// Define which Pokémon ID attacks which Enemy ID
+const ASSIGNMENTS = {
+    'mewtwo': 'coding',
+    'rotom': 'terminal',
+    'ditto': 'floppy',
+    'unown': 'www',
+    'snorlax': 'dummy', // Placeholder Target
+    'smeargle': 'dummy' // Placeholder Target
+};
+
 const POKEMON_LIST = [
     { id: 'snorlax', file: 'snorlax.gif',   w: 60, h: 60 },
     { id: 'rotom',   file: 'rotom.gif',     w: 50, h: 50 },
@@ -70,7 +80,8 @@ const ENEMY_LIST = [
     { id: 'coding',  file: 'coding.gif',    w: 70, h: 70, x: 220, y: 160 },
     { id: 'floppy',  file: 'floppy.gif',    w: 35, h: 35, x: 580, y: 160 },
     { id: 'www',     file: 'www.gif',       w: 80, h: 60, x: 220, y: 440 },
-    { id: 'terminal',file: 'terminal.webp', w: 85, h: 85, x: 580, y: 440 }
+    { id: 'terminal',file: 'terminal.webp', w: 85, h: 85, x: 580, y: 440 },
+    { id: 'dummy',   file: 'ball',          w: 40, h: 40, x: 400, y: 450 } // Hidden/Visual Test target
 ];
 
 const config = {
@@ -96,43 +107,52 @@ function preload() {
     this.load.setPath(baseUrl + assetPath);
     
     POKEMON_LIST.forEach(p => this.load.image(p.id, p.file + v));
-    ENEMY_LIST.forEach(e => this.load.image(e.id, e.file + v));
+    ENEMY_LIST.forEach(e => {
+        if(e.id !== 'dummy') this.load.image(e.id, e.file + v);
+    });
 
     this.load.on('loaderror', (file) => addLog(`ERR: ${file.key} FAIL`));
 }
 
 let belt = {};
 let activeNodes = {};
-let grid;
 
 function create() {
-    addLog("RANDOM_DISPATCH_INIT");
-    grid = this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
+    addLog("TARGETING_SYSTEM_ONLINE");
+    this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
     this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
 
     POKEMON_LIST.forEach((p, i) => {
         const y = 85 + (i * 85);
         const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
+        
+        // --- IDLE SHAKE ANIMATION ---
+        this.tweens.add({
+            targets: ball,
+            angle: { from: -10, to: 10 },
+            duration: 150,
+            yoyo: true,
+            repeat: -1,
+            repeatDelay: 2000 + (Math.random() * 3000)
+        });
+
         const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
         belt[p.id] = { ball, nameText, y, busy: false };
     });
 
-    this.time.addEvent({ delay: 3000, callback: autoDispatch, callbackScope: this, loop: true });
+    this.time.addEvent({ delay: 3000, callback: strategicDispatch, callbackScope: this, loop: true });
 }
 
-function autoDispatch() {
-    // 1. Get all currently free Pokémon
-    const availableAgents = POKEMON_LIST.filter(p => !belt[p.id].busy);
-    // 2. Get all currently available tasks
-    const availableTasks = ENEMY_LIST.filter(e => !activeNodes[e.id]);
-
-    if (availableAgents.length > 0 && availableTasks.length > 0) {
-        // 3. Pick random indices
-        const randomAgent = Phaser.Utils.Array.GetRandom(availableAgents);
-        const randomTask = Phaser.Utils.Array.GetRandom(availableTasks);
+function strategicDispatch() {
+    POKEMON_LIST.forEach(p => {
+        const targetId = ASSIGNMENTS[p.id];
+        const targetNode = ENEMY_LIST.find(e => e.id === targetId);
         
-        launchMission.call(this, randomAgent.id, randomTask);
-    }
+        // Dispatch if Pokémon is free AND target node is free
+        if (!belt[p.id].busy && !activeNodes[targetId]) {
+            launchMission.call(this, p.id, targetNode);
+        }
+    });
 }
 
 function launchMission(aId, node) {
@@ -140,7 +160,7 @@ function launchMission(aId, node) {
     activeNodes[node.id] = true;
     belt[aId].ball.setAlpha(0.2);
     
-    addLog(`DEPLOY: ${aId.toUpperCase()}`);
+    addLog(`ENGAGING: ${aId.toUpperCase()} -> ${node.id.toUpperCase()}`);
 
     const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
     this.tweens.add({
@@ -156,7 +176,7 @@ function beginBattle(aId, node) {
     const pConf = POKEMON_LIST.find(p => p.id === aId);
     if(!pConf) return;
 
-    const enemyImg = this.textures.exists(node.id) ? node.id : 'ball';
+    const enemyImg = (node.id === 'dummy' || !this.textures.exists(node.id)) ? 'ball' : node.id;
     const pokeImg = this.textures.exists(aId) ? aId : 'ball';
 
     const enemy = this.add.image(node.x + 50, node.y, enemyImg).setDisplaySize(node.w, node.h);
@@ -171,12 +191,9 @@ function beginBattle(aId, node) {
             if (hp && hp.active && hp.width > 0) {
                 hp.width -= 15;
                 
-                // HIT ANIMATION (Particle Effect)
+                // HIT ANIMATION
                 const spark = this.add.star(node.x + 40, node.y, 5, 2, 8, 0x00d2ff);
-                this.tweens.add({
-                    targets: spark, scale: 2, alpha: 0, duration: 150, 
-                    onComplete: () => spark.destroy()
-                });
+                this.tweens.add({ targets: spark, scale: 2, alpha: 0, duration: 150, onComplete: () => spark.destroy() });
 
                 if (enemy && enemy.active) {
                     enemy.setTint(0x00d2ff);
@@ -185,7 +202,7 @@ function beginBattle(aId, node) {
             }
             if (hp && hp.width <= 0) {
                 combatTween.stop();
-                addLog(`CLEARED: ${node.id.toUpperCase()}`);
+                addLog(`SECURED: ${node.id.toUpperCase()}`);
                 this.cameras.main.shake(150, 0.005); 
                 if(enemy) enemy.destroy(); 
                 if(hp) hp.destroy(); 
