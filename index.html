@@ -38,7 +38,7 @@
 <div id="ui-layer">
     <div id="header">
         <div style="font-size: 20px; font-weight: 900;">OpenClaw <span style="color: #fff;">Command</span></div>
-        <div style="font-size: 10px; opacity: 0.8;">LINK_STATUS: STABLE</div>
+        <div style="font-size: 10px; opacity: 0.8;">GRID_LINK: ENHANCED</div>
     </div>
     <div id="terminal">
         <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid rgba(0,210,255,0.3);">TACTICAL_LOG</div>
@@ -56,8 +56,7 @@ function addLog(msg) {
     if(logContent.children.length > 5) logContent.lastChild.remove();
 }
 
-// --- MASTER LISTS ---
-// Easily add/remove assets here
+// --- STRUCTURED ASSET LISTS ---
 const POKEMON_LIST = [
     { id: 'snorlax', file: 'snorlax.gif',   w: 60, h: 60 },
     { id: 'rotom',   file: 'rotom.gif',     w: 50, h: 50 },
@@ -91,40 +90,50 @@ function preload() {
     
     const v = "?v=" + Date.now();
     
-    // Core Assets
     this.load.image('blue', 'trainerblue.gif' + v);
     
-    // External Path for Poke-ball
     this.load.setPath(''); 
     this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
     this.load.setPath(baseUrl + assetPath);
     
-    // Load from Lists
     POKEMON_LIST.forEach(p => this.load.image(p.id, p.file + v));
     ENEMY_LIST.forEach(e => this.load.image(e.id, e.file + v));
 
-    this.load.on('loaderror', (file) => addLog(`LOAD_FAIL: ${file.key}`));
+    this.load.on('loaderror', (file) => addLog(`ERR: ${file.key} MISSING`));
 }
 
 let belt = {};
 let activeNodes = {};
+let grid;
 
 function create() {
-    addLog("SYSTEM_BOOT_SUCCESS");
-    this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
+    addLog("OS_V10_DEPLOYED");
+    
+    // Grid Setup
+    grid = this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
 
-    // Leader Blue (Bigger)
+    // Leader Blue
     this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
 
-    // Sidebar creation using the List
+    // Sidebar
     POKEMON_LIST.forEach((p, i) => {
         const y = 85 + (i * 85);
         const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
         const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
-        belt[p.id] = { ball, nameText, y, busy: false, config: p };
+        belt[p.id] = { ball, nameText, y, busy: false };
     });
 
     this.time.addEvent({ delay: 3500, callback: autoDispatch, callbackScope: this, loop: true });
+}
+
+function pulseGrid(scene) {
+    scene.tweens.add({
+        targets: grid,
+        outlineAlpha: 0.4,
+        duration: 200,
+        yoyo: true,
+        ease: 'Quad.easeInOut'
+    });
 }
 
 function autoDispatch() {
@@ -140,7 +149,9 @@ function launchMission(aId, node) {
     belt[aId].busy = true;
     activeNodes[node.id] = true;
     belt[aId].ball.setAlpha(0.2);
+    
     addLog(`DEPLOY: ${aId.toUpperCase()}`);
+    pulseGrid(this); // Trigger Grid Pulse
 
     const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
     this.tweens.add({
