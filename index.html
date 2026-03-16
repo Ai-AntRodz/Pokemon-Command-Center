@@ -7,7 +7,6 @@
         :root { --neon-blue: #00d2ff; --dark-bg: #000a14; --panel-bg: rgba(0, 20, 40, 0.9); }
         body { margin: 0; background: var(--dark-bg); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Courier New', monospace; }
         
-        /* Cyber CRT Overlay */
         body::before {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
@@ -15,7 +14,6 @@
         }
 
         canvas { border: 2px solid var(--neon-blue); box-shadow: 0 0 20px rgba(0, 210, 255, 0.3); }
-
         #ui-layer { position: absolute; width: 800px; height: 600px; pointer-events: none; }
         
         #terminal {
@@ -58,6 +56,24 @@ function addLog(msg) {
     if(logContent.children.length > 5) logContent.lastChild.remove();
 }
 
+// --- MASTER LISTS ---
+// Easily add/remove assets here
+const POKEMON_LIST = [
+    { id: 'snorlax', file: 'snorlax.gif',   w: 60, h: 60 },
+    { id: 'rotom',   file: 'rotom.gif',     w: 50, h: 50 },
+    { id: 'unown',   file: 'unown.gif',     w: 45, h: 45 },
+    { id: 'smeargle',file: 'smeargle.gif',  w: 55, h: 55 },
+    { id: 'mewtwo',  file: 'mewtwo.gif',    w: 70, h: 90 },
+    { id: 'ditto',   file: 'ditto.gif',     w: 55, h: 50 }
+];
+
+const ENEMY_LIST = [
+    { id: 'coding',  file: 'coding.gif',    w: 70, h: 70, x: 220, y: 160 },
+    { id: 'floppy',  file: 'floppy.gif',    w: 35, h: 35, x: 580, y: 160 },
+    { id: 'www',     file: 'www.gif',       w: 80, h: 60, x: 220, y: 440 },
+    { id: 'terminal',file: 'terminal.webp', w: 85, h: 85, x: 580, y: 440 }
+];
+
 const config = {
     type: Phaser.AUTO,
     width: 800,
@@ -68,115 +84,85 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// --- UPDATED FILENAMES & HARD SCALES ---
-const SCALES = {
-    'blue': {w:115, h:145}, 
-    'snorlax': {w:60, h:60}, 
-    'rotom': {w:50, h:50}, 
-    'unown': {w:45, h:45},
-    'smeargle': {w:55, h:55}, 
-    'mewtwo': {w:70, h:90}, 
-    'ditto': {w:55, h:50},
-    'coding': {w:70, h:70}, 
-    'floppy': {w:35, h:35}, // Tiny Floppy
-    'terminal': {w:85, h:85}, 
-    'www': {w:80, h:60}
-};
-
-const AGENTS = ['snorlax', 'rotom', 'unown', 'smeargle', 'mewtwo', 'ditto'];
-const ENEMY_NODES = {
-    A: { key: 'coding', file: 'coding.gif', x: 220, y: 160 },
-    B: { key: 'floppy', file: 'floppy.gif', x: 580, y: 160 },
-    C: { key: 'www',    file: 'www.gif',    x: 220, y: 440 },
-    D: { key: 'terminal', file: 'terminal.webp', x: 580, y: 440 }
-};
-
 function preload() {
-    const path = 'gifs-Sprites/';
+    const baseUrl = window.location.href.replace('index.html', '');
+    const assetPath = 'gifs-Sprites/';
+    this.load.setPath(baseUrl + assetPath);
+    
     const v = "?v=" + Date.now();
     
-    // Fail-safe: Force start if loading takes more than 5 seconds
-    this.time.delayedCall(5000, () => {
-        if (!this.scene.isActive()) {
-            console.warn("Loader timeout - forcing start.");
-            this.scene.start();
-        }
-    });
-
-    this.load.image('blue', path + 'trainerblue.gif' + v);
-    this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
+    // Core Assets
+    this.load.image('blue', 'trainerblue.gif' + v);
     
-    AGENTS.forEach(k => this.load.image(k, path + k + '.gif' + v));
-    Object.values(ENEMY_NODES).forEach(n => this.load.image(n.key, path + n.file + v));
+    // External Path for Poke-ball
+    this.load.setPath(''); 
+    this.load.image('ball', 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png');
+    this.load.setPath(baseUrl + assetPath);
+    
+    // Load from Lists
+    POKEMON_LIST.forEach(p => this.load.image(p.id, p.file + v));
+    ENEMY_LIST.forEach(e => this.load.image(e.id, e.file + v));
 
-    this.load.on('loaderror', (file) => {
-        addLog(`LOAD_FAIL: ${file.key}`);
-    });
+    this.load.on('loaderror', (file) => addLog(`LOAD_FAIL: ${file.key}`));
 }
 
 let belt = {};
-let activeTasks = {};
+let activeNodes = {};
 
 function create() {
     addLog("SYSTEM_BOOT_SUCCESS");
     this.add.grid(400, 300, 800, 600, 40, 40, 0x000, 0, 0x00d2ff, 0.05);
 
-    // Leader Blue
-    const bS = SCALES.blue;
-    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(bS.w, bS.h);
+    // Leader Blue (Bigger)
+    this.blue = this.add.image(400, 300, 'blue').setDisplaySize(115, 145);
 
-    // Sidebar
-    AGENTS.forEach((key, i) => {
+    // Sidebar creation using the List
+    POKEMON_LIST.forEach((p, i) => {
         const y = 85 + (i * 85);
         const ball = this.add.image(50, y, 'ball').setDisplaySize(28, 28);
-        const nameText = this.add.text(80, y, key.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
-        belt[key] = { ball, nameText, y, busy: false };
+        const nameText = this.add.text(80, y, p.id.toUpperCase(), { fontSize: '11px', color: '#00d2ff', fontStyle: 'bold' }).setOrigin(0, 0.5);
+        belt[p.id] = { ball, nameText, y, busy: false, config: p };
     });
 
     this.time.addEvent({ delay: 3500, callback: autoDispatch, callbackScope: this, loop: true });
 }
 
 function autoDispatch() {
-    const freeAgent = AGENTS.find(a => !belt[a].busy);
-    const freeNodeKey = Object.keys(ENEMY_NODES).find(k => !activeTasks[k]);
+    const freeAgentId = POKEMON_LIST.find(p => !belt[p.id].busy)?.id;
+    const freeNode = ENEMY_LIST.find(e => !activeNodes[e.id]);
 
-    if (freeAgent && freeNodeKey) {
-        launchMission.call(this, freeAgent, freeNodeKey);
+    if (freeAgentId && freeNode) {
+        launchMission.call(this, freeAgentId, freeNode);
     }
 }
 
-function launchMission(aKey, nKey) {
-    const node = ENEMY_NODES[nKey];
-    belt[aKey].busy = true;
-    activeTasks[nKey] = true;
-    belt[aKey].ball.setAlpha(0.2);
+function launchMission(aId, node) {
+    belt[aId].busy = true;
+    activeNodes[node.id] = true;
+    belt[aId].ball.setAlpha(0.2);
+    addLog(`DEPLOY: ${aId.toUpperCase()}`);
 
-    addLog(`MISSION_START: ${aKey.toUpperCase()}`);
-
-    const ball = this.add.image(50, belt[aKey].y, 'ball').setDisplaySize(28, 28);
+    const ball = this.add.image(50, belt[aId].y, 'ball').setDisplaySize(28, 28);
     this.tweens.add({
         targets: ball, x: node.x, y: node.y, angle: 360, duration: 800,
         onComplete: () => {
             ball.destroy();
-            beginBattle.call(this, aKey, nKey);
+            beginBattle.call(this, aId, node);
         }
     });
 }
 
-function beginBattle(aKey, nKey) {
-    const node = ENEMY_NODES[nKey];
-    const eS = SCALES[node.key] || {w:50, h:50};
-    const pS = SCALES[aKey] || {w:50, h:50};
-
-    // Check if texture actually loaded, else use ball placeholder
-    const enemyImg = this.textures.exists(node.key) ? node.key : 'ball';
-    const pokeImg = this.textures.exists(aKey) ? aKey : 'ball';
-
-    const enemy = this.add.image(node.x + 50, node.y, enemyImg).setDisplaySize(eS.w, eS.h);
-    const poke = this.add.image(node.x - 50, node.y, pokeImg).setDisplaySize(pS.w, pS.h);
+function beginBattle(aId, node) {
+    const pConf = POKEMON_LIST.find(p => p.id === aId);
     
-    const bg = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), 60, 4, 0x002244);
-    const hp = this.add.rectangle(node.x + 50, node.y - (eS.h/2 + 12), 60, 4, 0x00d2ff);
+    const enemyImg = this.textures.exists(node.id) ? node.id : 'ball';
+    const pokeImg = this.textures.exists(aId) ? aId : 'ball';
+
+    const enemy = this.add.image(node.x + 50, node.y, enemyImg).setDisplaySize(node.w, node.h);
+    const poke = this.add.image(node.x - 50, node.y, pokeImg).setDisplaySize(pConf.w, pConf.h);
+    
+    const bg = this.add.rectangle(node.x + 50, node.y - (node.h/2 + 12), 60, 4, 0x002244);
+    const hp = this.add.rectangle(node.x + 50, node.y - (node.h/2 + 12), 60, 4, 0x00d2ff);
 
     this.tweens.add({
         targets: poke, x: '+=20', duration: 200, yoyo: true, repeat: -1,
@@ -184,25 +170,24 @@ function beginBattle(aKey, nKey) {
             hp.width -= 12;
             enemy.setTint(0x00d2ff);
             this.time.delayedCall(50, () => enemy.clearTint());
-            
             if (hp.width <= 0) {
-                addLog(`TARGET_DOWN: ${node.key.toUpperCase()}`);
+                addLog(`TARGET_DOWN: ${node.id.toUpperCase()}`);
                 this.tweens.killTweensOf(poke);
                 enemy.destroy(); hp.destroy(); bg.destroy();
-                retreat.call(this, aKey, nKey, poke);
+                retreat.call(this, aId, node.id, poke);
             }
         }
     });
 }
 
-function retreat(aKey, nKey, sprite) {
+function retreat(aId, nodeId, sprite) {
     this.tweens.add({
-        targets: sprite, x: 50, y: belt[aKey].y, alpha: 0, scale: 0, duration: 600,
+        targets: sprite, x: 50, y: belt[aId].y, alpha: 0, scale: 0, duration: 600,
         onComplete: () => {
             sprite.destroy();
-            belt[aKey].busy = false;
-            belt[aKey].ball.setAlpha(1);
-            delete activeTasks[nKey];
+            belt[aId].busy = false;
+            belt[aId].ball.setAlpha(1);
+            delete activeNodes[nodeId];
         }
     });
 }
